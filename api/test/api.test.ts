@@ -244,6 +244,13 @@ describe("API de Paritario", { skip: hay ? false : "sin base de pruebas (PGTEST_
       assert.equal((await llamar("GET", `/api/comites/${c1}/reuniones?anio=2026`, "coord")).json.length, 12);
     });
 
+    it("el cronograma parte en el mes de constitución del comité", async () => {
+      const e1 = await empresaId("Empresa 1");
+      const nuevo = await llamar("POST", "/api/comites", "admin1", { empresa_id: e1, nombre: "C-mayo", fecha_constitucion: "2026-05-11" });
+      assert.equal((await llamar("POST", `/api/comites/${nuevo.json.id}/cronograma`, "admin1", { anio: 2026 })).json.creadas, 8);
+      assert.equal((await llamar("POST", `/api/comites/${nuevo.json.id}/cronograma`, "admin1", { anio: 2025 })).json.creadas, 0);
+    });
+
     it("sube el acta: registro pendiente, URL firmada y confirmación con la huella", async () => {
       const c1 = await comiteId("C1");
       const contenido = Buffer.from("%PDF-1.7 acta de prueba");

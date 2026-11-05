@@ -47,17 +47,21 @@ export function rutasReuniones(app: FastifyInstance, ctx: Contexto): void {
     return rep.status(201).send({ id: nuevo });
   });
 
-  // Crea las reuniones ordinarias del año: una por mes, en los meses que no tienen.
+  // Crea las reuniones ordinarias del año: una por mes, en los meses que no
+  // tienen, desde el mes de constitución del comité (antes no se exigen).
   app.post("/api/comites/:id/cronograma", async (req, rep) => {
     const d = datos(z.object({ anio }), req.body);
     const r = await ctx.tx(req, async (c, s) => {
       const cm = await comiteEditable(c, s, id(req));
       const meses = await varios<{ mes: number }>(c, "SELECT DISTINCT mes FROM reunion WHERE comite_id = $1 AND anio = $2", [cm.id, d.anio]);
       const ocupados = new Set(meses.map((m) => m.mes));
+      const constitucion = await uno<{ fecha: string | null }>(c, "SELECT fecha_constitucion AS fecha FROM comite WHERE id = $1", [cm.id]);
+      const [anioConst, mesConst] = (constitucion?.fecha ?? "").split("-").map(Number);
+      const desde = !anioConst || anioConst < d.anio ? 1 : anioConst > d.anio ? 13 : mesConst!;
       const n = await uno<{ n: number }>(c, "SELECT coalesce(max(numero), 0) AS n FROM reunion WHERE comite_id = $1 AND anio = $2", [cm.id, d.anio]);
       let numero = n!.n;
       let creadas = 0;
-      for (let mes = 1; mes <= 12; mes++) {
+      for (let mes = desde; mes <= 12; mes++) {
         if (ocupados.has(mes)) continue;
         await insertar(c, "reunion", { comite_id: cm.id, anio: d.anio, mes, numero: ++numero });
         creadas++;

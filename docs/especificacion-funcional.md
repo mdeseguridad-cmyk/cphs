@@ -84,10 +84,10 @@ El corazón operativo del sistema: el plan de actividades preventivas del comit�
 
 Registra las reuniones mensuales del comité y sus actas, y calcula el cumplimiento de forma automática.
 
-- Mantener el cronograma mensual con el estado de cada reunión: planificada, realizada o no realizada.
+- Mantener el cronograma mensual con el estado de cada reunión: planificada, realizada o no realizada. El cronograma del año se genera desde el mes de constitución del comité.
 - Registrar la asistencia de cada integrante por reunión.
 - Cargar el acta de cada sesión (PDF) y el acta de constitución.
-- Calcular el **porcentaje de cumplimiento** a partir de las reuniones realizadas vs. exigidas, sin captura manual.
+- Calcular el **porcentaje de cumplimiento** a partir de las reuniones realizadas vs. exigidas, sin captura manual. Son exigidas las reuniones registradas (realizadas o no) y las de meses ya terminados sin registro, que cuentan como incumplidas y se marcan «sin registrar». Los meses antes de la constitución o después de la disolución no se exigen.
 - Según el DS 44, el comité debe reunirse al menos una vez al mes y dejar acta de cada sesión; el sistema evidencia ese cumplimiento y alerta sobre reuniones no realizadas.
 
 ## 9. Certificación y auditorías
@@ -149,7 +149,7 @@ Esta sección es orientación de diseño y debe validarse con asesoría legal.
 
 Arquitectura desacoplada sobre Linux, con servicios administrados y aislamiento de red por VPC.
 
-- **Front:** SPA (React o Angular) servida como sitio estático (S3 + CloudFront).
+- **Front:** SPA en React + TypeScript (implementada para el MVP en `web/`), servida como sitio estático (S3 + CloudFront). Lee su configuración (`config.json`) al cargar, así la misma compilación sirve para cualquier entorno.
 - **API:** servicio REST en TypeScript sobre Node 22 (implementado para el MVP en `api/`), empaquetado como imagen de contenedor. Parte en **AWS Lambda** (con Lambda Web Adapter), que cobra solo por solicitud y no necesita balanceador; con tráfico sostenido, la misma imagen pasa a ECS Fargate detrás de un balanceador sin cambiar la aplicación. Las tareas que necesitan internet (correo, alta de usuarios) las hace una segunda función fuera de la red privada, que no tiene acceso a la base.
 - **Datos:** PostgreSQL administrado (RDS; Multi-AZ en producción), al que la API entra con tokens de IAM, sin claves guardadas; documentos (actas, informes) en S3 cifrado, subidos y bajados directo desde el navegador con URL firmadas; caché/sesión en Redis (ElastiCache) solo cuando la escala lo justifique. Cada empresa cliente queda aislada en la base de datos con Row-Level Security (ver [`db/schema.sql`](../db/schema.sql)).
 - **Identidad:** Cognito (o Entra ID) para autenticación, MFA y roles.
@@ -179,6 +179,8 @@ Cada empresa nueva se incorpora con un proceso guiado; no hay un sistema anterio
 | 4 · Escala | Privacidad 21.719, PWA móvil, nuevos clientes | — |
 
 La entrega avanza por fases. El MVP (fases 1 y 2) cubre el núcleo legal y el programa de trabajo, y se valida con un piloto de 10 empresas. La fase 3 agrega certificación, autoservicio y reportes; la fase 4 completa la privacidad 21.719, la PWA móvil y la apertura a nuevos clientes y a organismos en marca blanca.
+
+**Estado del MVP:** la API (`api/`) y la aplicación web (`web/`) de las fases 1 y 2 están programadas y probadas: verificaciones de la base de datos, pruebas de la API contra PostgreSQL real y una prueba de punta a punta en el navegador con los roles de administrador, coordinador, auditor y organismo. La infraestructura del piloto está escrita en Terraform; falta aplicarla en la cuenta de AWS y probar el inicio de sesión real con Cognito. Quedan para después del MVP: activar MFA y recuperar la contraseña desde la aplicación, solicitudes de acceso por autoservicio, investigación de accidentes y sincronización por SFTP.
 
 ## 17. Supuestos, restricciones y riesgos
 

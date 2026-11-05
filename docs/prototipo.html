@@ -165,6 +165,8 @@
   .mo.done{border-color:var(--ok);background:var(--ok-soft)} .mo.done .st{color:var(--ok)}
   .mo.plan{border-style:dashed} .mo.plan .st{color:var(--muted)}
   .mo.miss{border-color:var(--crit);background:var(--crit-soft)} .mo.miss .st{color:var(--crit)}
+  .mo.pend{border-color:var(--warn);background:var(--warn-soft)} .mo.pend .st{color:var(--warn)}
+  .mo.na{opacity:.45;border-style:dashed}
 
   .doc{display:flex;align-items:center;gap:12px;padding:12px 16px;border-bottom:1px solid var(--border)}
   .doc:last-child{border-bottom:none}
@@ -320,7 +322,7 @@ const comites = [
    actas:[["Acta de constitución","2025-02-20"],["Acta reunión octubre 2026","2026-10-03"]]},
   {id:3, name:"CPHS Agencia Concepción", suc:"Agencia Biobío", reg:"Del Biobío", com:"Concepción", estado:"activo",
    cert:"oro", vig:"2026–2028", prox:"2026-11-20",
-   meetings:["plan","plan","plan","plan","plan","plan","plan","plan","plan","plan","plan","plan"],
+   meetings:["na","na","na","na","done","done","done","miss","done","plan","plan","plan"],
    tit:[["Claudia Saldaña","Presidenta","empresa"],["Mario Cuevas","Integrante","empresa"],["Elena Thus","Integrante","empresa"],["Karin Vera","Integrante","trabajadores"],["Felipe Monar","Integrante","trabajadores"],["Cristina Ponce","Integrante","trabajadores"]],
    sup:[["Ana Castalli","Secretaria","empresa"],["Marly Cid","Integrante","empresa"],["Daniel Sáez","Integrante","empresa"],["Paola Alfaro","Integrante","trabajadores"],["Débora Pozo","Integrante","trabajadores"],["Marcos Cruz","Integrante","trabajadores"]],
    actas:[["Acta de constitución","2026-05-11"]]},
@@ -332,7 +334,7 @@ const comites = [
    actas:[["Acta de constitución","2025-04-02"],["Acta reunión agosto 2026","2026-08-12"]]},
   {id:5, name:"CPHS Obra Laguna del Sol", suc:"Obra PA-13", reg:"Metropolitana", com:"Padre Hurtado", estado:"baja",
    cert:null, vig:"2024–2026", prox:null,
-   meetings:["done","done","done","done","done","done","plan","plan","plan","plan","plan","plan"],
+   meetings:["done","done","done","done","done","done","na","na","na","na","na","na"],
    tit:[["Jorge Salinas","Presidente","empresa"],["Rita Campos","Integrante","empresa"],["Ema Fica","Integrante","trabajadores"]],
    sup:[["Luis Pino","Secretario","empresa"],["Ana Soto","Integrante","trabajadores"]],
    actas:[["Acta de constitución","2024-06-10"],["Acta de disolución","2026-06-30"]]},
@@ -406,7 +408,12 @@ let SOLIC=[
 const $=s=>document.querySelector(s), wrap=$("#wrap");
 const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const inic=n=>n.split(" ").slice(0,2).map(w=>w[0]).join("").toUpperCase();
-const comply=c=>{const d=c.meetings.filter(m=>m==="done").length,due=c.meetings.filter(m=>m!=="plan").length;return due?Math.round(d/due*100):100;};
+// Mes de los datos de ejemplo (noviembre 2026, índice 10). Una reunión
+// planificada de un mes ya terminado cuenta como exigida e incumplida; los
+// meses antes de la constitución o después de la disolución no se exigen.
+const MES_ACTUAL=10;
+const estadoMes=(m,i)=>m==="plan"&&i<MES_ACTUAL?"pend":m;
+const comply=c=>{const e=c.meetings.map(estadoMes),d=e.filter(m=>m==="done").length,due=e.filter(m=>m==="done"||m==="miss"||m==="pend").length;return due?Math.round(d/due*100):100;};
 const fdate=s=>{if(!s)return"—";const[y,m,d]=s.split("-");return `${d}/${m}/${y}`;};
 
 /* ---------- views ---------- */
@@ -416,8 +423,8 @@ function vDashboard(){
   const avg=Math.round(act.reduce((s,c)=>s+comply(c),0)/act.length);
   const alerts=[];
   comites.forEach(c=>{
-    const miss=c.meetings.filter(m=>m==="miss").length;
-    if(miss)alerts.push(["crit","Reuniones sin realizar",`${esc(c.name)} — ${miss} reunión(es) no registrada(s) este año`,c.id]);
+    const e=c.meetings.map(estadoMes),miss=e.filter(m=>m==="miss").length,pend=e.filter(m=>m==="pend").length;
+    if(miss||pend)alerts.push(["crit","Reuniones incumplidas",`${esc(c.name)} — ${[miss?`${miss} no realizada(s)`:"",pend?`${pend} sin registrar`:""].filter(Boolean).join(" y ")} este año`,c.id]);
     if(c.estado==="activo"&&!c.cert)alerts.push(["warn","Sin certificación vigente",`${esc(c.name)} no tiene auditoría de certificación`,c.id]);
     if(c.vig&&c.vig.endsWith("2026"))alerts.push(["warn","Vigencia por vencer",`${esc(c.name)} vence su periodo ${esc(c.vig)} — reconstituir`,c.id]);
     INV.filter(i=>i.comite===c.id&&i.estado!=="cerrada").forEach(i=>alerts.push([i.grav==="leve"?"warn":"crit","Investigación abierta",`${esc(c.name)} — ${TIPO_INV[i.tipo].toLowerCase()} del ${fdate(i.fecha)}`,c.id]));
@@ -522,10 +529,11 @@ function vComite(id){
       <div class="kanban">${KCOLS.map(k=>col(k[0])).join("")}</div>`;
 
   } else if(detailTab==="cronograma"){
-    const done=c.meetings.filter(m=>m==="done").length,miss=c.meetings.filter(m=>m==="miss").length;
+    const est=c.meetings.map(estadoMes),cnt=k=>est.filter(m=>m===k).length,done=cnt("done"),miss=cnt("miss"),pend=cnt("pend"),plan=cnt("plan"),na=cnt("na");
+    const LBL={done:"Realizada",miss:"No realizada",pend:"Sin registrar",plan:"Planificada",na:"No aplica"};
     tb.innerHTML=`<div class="card"><div class="card-h"><h3>Reuniones mensuales · 2026</h3><span class="num" style="font-size:13px;color:${p>=90?'var(--ok)':p>=70?'var(--warn)':'var(--crit)'};font-weight:700">${p}% cumplimiento</span></div>
-      <div class="card-b"><div class="months">${c.meetings.map((m,i)=>{const lbl=m==="done"?"Realizada":m==="miss"?"No realizada":"Planificada";return `<div class="mo ${m}"><div class="mn">${MES[i]}</div><div class="st">${lbl}</div></div>`;}).join("")}</div>
-      <p class="segtip" style="margin:14px 0 0">${done} realizadas · ${miss} no realizadas · ${12-done-miss} planificadas. Según el DS 44, el comité debe reunirse al menos una vez al mes y dejar acta de cada sesión.</p></div></div>`;
+      <div class="card-b"><div class="months">${est.map((m,i)=>`<div class="mo ${m}"><div class="mn">${MES[i]}</div><div class="st">${LBL[m]}</div></div>`).join("")}</div>
+      <p class="segtip" style="margin:14px 0 0">${done} realizadas · ${miss} no realizadas${pend?` · ${pend} sin registrar`:""} · ${plan} planificadas${na?` · ${na} no aplican`:""}. Según el DS 44, el comité debe reunirse al menos una vez al mes y dejar acta de cada sesión. Un mes ya terminado sin reunión registrada cuenta como incumplido; los meses antes de la constitución o después de la disolución no se exigen.</p></div></div>`;
 
   } else if(detailTab==="actas"){
     tb.innerHTML=`<div class="card"><div class="card-h"><h3>Actas y documentos</h3><button class="btn ghost sm"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 15V3M7 10l5 5 5-5M5 21h14"/></svg>Subir documento</button></div>
