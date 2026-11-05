@@ -20,6 +20,7 @@ Este repositorio contiene, por ahora, el diseño del producto y el esquema de ba
 | [`docs/arquitectura-aws.html`](docs/arquitectura-aws.html) | Arquitectura de referencia en AWS |
 | [`db/schema.sql`](db/schema.sql) | Esquema PostgreSQL 16: tablas, restricciones y seguridad por fila |
 | [`db/seed.sql`](db/seed.sql) | Catálogos base: regiones, roles y niveles de certificación generales |
+| [`db/seed_comunas.sql`](db/seed_comunas.sql) | Las 346 comunas con su código único territorial (CUT) vigente desde 2018 |
 | [`db/test_rls.sql`](db/test_rls.sql) | Prueba del aislamiento entre empresas y organismos, y de las reglas de negocio |
 
 Los archivos HTML se abren directamente en el navegador. El diagrama entidad-relación del modelo de datos carga la librería Mermaid desde cdnjs, así que necesita conexión a internet.
@@ -33,7 +34,7 @@ createdb paritario
 ```
 
 ```bash
-psql -d paritario -v ON_ERROR_STOP=1 -f db/schema.sql -f db/seed.sql
+psql -d paritario -v ON_ERROR_STOP=1 -f db/schema.sql -f db/seed.sql -f db/seed_comunas.sql
 ```
 
 Para verificar el aislamiento y las reglas de negocio sobre una base de prueba (el script se revierte al final y no deja datos):
@@ -75,6 +76,6 @@ Las vistas `v_cumplimiento_reuniones` y `v_paridad_comite` calculan el cumplimie
 
 ### Pendiente en la base de datos
 
-- Cargar las comunas desde el listado oficial de códigos únicos territoriales (CUT) de la SUBDERE.
+- Confirmar contra la planilla oficial de la SUBDERE la grafía de 5 comunas que difiere entre las fuentes usadas (detalle en la cabecera de `db/seed_comunas.sql`).
 - Definir los plazos de `politica_retencion` con asesoría legal.
 - Las funciones de ámbito devuelven arreglos de ids; con miles de empresas por organismo conviene revisar su rendimiento con datos reales.

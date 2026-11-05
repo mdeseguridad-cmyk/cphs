@@ -24,8 +24,7 @@ INSERT INTO region (id, nombre, orden) VALUES
     (11, 'Aysén del General Carlos Ibáñez del Campo', 15),
     (12, 'Magallanes y de la Antártica Chilena', 16);
 
--- Comunas: cargar desde el listado oficial de códigos únicos territoriales
--- (CUT) de la SUBDERE. No se incluyen aquí para no versionar 346 filas a mano.
+-- Comunas: en db/seed_comunas.sql (346 comunas con su código único territorial).
 
 -- Roles del sistema.
 INSERT INTO rol (id, codigo, nombre, descripcion, es_de_organismo) VALUES
