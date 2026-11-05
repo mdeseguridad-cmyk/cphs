@@ -97,9 +97,9 @@
 
 <div class="page">
   <header class="hero">
-    <div class="eyebrow">Especificación técnica · v5.1</div>
+    <div class="eyebrow">Especificación técnica · v5.2</div>
     <h1>Modelo de datos · Sistema de Comités Paritarios</h1>
-    <p>Esquema relacional de <b>Paritario</b>, plataforma independiente para gestionar Comités Paritarios de Higiene y Seguridad. Funciona en dos modos: <b>venta directa</b> a empresas y <b>marca blanca</b> para organismos administradores (mutualidades o servicios públicos) que entregan la plataforma a sus empresas adherentes con su propia marca. <b>31 entidades</b> en cinco dominios, alineado al <b>DS 44/2024</b> y preparado para la <b>Ley 21.719</b> de protección de datos, con paridad funcional sobre plataformas de referencia del mercado (comisiones, programa de trabajo por rubro, material de apoyo, autoservicio de accesos). Tipos en notación PostgreSQL; aplican igual a SQL Server con equivalencias menores. Las entidades marcadas <span class="tag-new" style="margin:0">nuevo</span> son las sumadas en esta versión.</p>
+    <p>Esquema relacional de <b>Paritario</b>, plataforma independiente para gestionar Comités Paritarios de Higiene y Seguridad. Funciona en dos modos: <b>venta directa</b> a empresas y <b>marca blanca</b> para organismos administradores (mutualidades o servicios públicos) que entregan la plataforma a sus empresas adherentes con su propia marca. <b>33 entidades</b> en cinco dominios, alineado al <b>DS 44/2024</b> y preparado para la <b>Ley 21.719</b> de protección de datos, con paridad funcional sobre plataformas de referencia del mercado (comisiones, programa de trabajo por rubro, material de apoyo, autoservicio de accesos). Tipos en notación PostgreSQL; aplican igual a SQL Server con equivalencias menores. Las entidades marcadas <span class="tag-new" style="margin:0">nuevo</span> son las sumadas en esta versión.</p>
     <div class="toolbar">
       <div class="legend">
         <span class="lg"><span class="kbadge kpk">PK</span>llave primaria</span>
@@ -139,7 +139,7 @@
     </ul></div>
   </section>
 
-  <footer>Especificación v5.1 · producto independiente con marca blanca para organismos · datos y nombres de ejemplo · notación PostgreSQL 16 · paridad funcional de mercado, identidad propia.</footer>
+  <footer>Especificación v5.2 · producto independiente con marca blanca para organismos · datos y nombres de ejemplo · notación PostgreSQL 16 · paridad funcional de mercado, identidad propia.</footer>
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/mermaid/10.9.1/mermaid.min.js"></script>
@@ -150,7 +150,7 @@
 const DOMAINS=[
  {n:"01", t:"Organización", s:"Organismos administradores, empresas y centros de trabajo.",
   ents:[
-   {name:"organismo_administrador", desc:"Catálogo de organismos administradores de la Ley 16.744.", isNew:true, cols:[
+   {name:"organismo_administrador", desc:"Catálogo de organismos administradores de la Ley 16.744.", cols:[
      ["id","smallint","PK",""],["sigla","varchar(10)","UQ","ACHS · IST · MUSEG · ISL"],["nombre","varchar(120)","UQ",""],
      ["tipo","enum","","mutualidad · servicio_publico"],
      ["codigo_suseso","char(4)","UQ","código de identificación SUSESO (3111, 3112, 3113); nulo para el ISL"]]},
@@ -169,10 +169,15 @@ const DOMAINS=[
      ["protocolo","varchar(30)","","SAML · OIDC · API REST · SFTP"],
      ["configuracion","jsonb","","parámetros sin secretos (los secretos van en la bóveda)"],
      ["estado","enum","","en_prueba · activa · inactiva"],["ultima_sincronizacion","timestamptz","",""]]},
+   {name:"actividad_seccion", desc:"Secciones del CIIU4.CL 2012 (A–U): el rubro de la empresa.", isNew:true, cols:[
+     ["codigo","char(1)","PK","A–U"],["nombre","varchar(200)","UQ","p. ej. CONSTRUCCIÓN"]]},
+   {name:"actividad_economica", desc:"Códigos de actividad económica del SII (674, de 6 dígitos).", isNew:true, cols:[
+     ["codigo","char(6)","PK","p. ej. 410010"],["seccion","char(1)","FK:actividad_seccion","rubro al que pertenece"],
+     ["grupo","varchar(200)","","agrupación del SII"],["descripcion","varchar(300)","",""]]},
    {name:"empresa", desc:"Empresa cliente de la plataforma (tenant).", cols:[
      ["id","bigint","PK",""],["rut","varchar(12)","UQ","RUT de la empresa"],
      ["razon_social","varchar(200)","","Razón social legal"],["nombre_fantasia","varchar(200)","",""],
-     ["rubro","varchar(120)","","Actividad económica — define la plantilla de programa"],
+     ["actividad_economica_codigo","char(6)","FK:actividad_economica","código SII principal; su sección define el rubro"],
      ["organismo_id","bigint","FK:organismo","organismo que la entrega; nulo si es cliente directo"],
      ["organismo_administrador_id","smallint","FK:organismo_administrador","organismo al que está adherida"],
      ["plan","varchar(40)","","plan contratado"],
@@ -215,7 +220,7 @@ const DOMAINS=[
  {n:"03", t:"Programa de trabajo, cumplimiento y certificación", s:"Plantillas por rubro, actividades Kanban, reuniones, material y auditorías.",
   ents:[
    {name:"programa_plantilla", desc:"Programa de trabajo propuesto según rubro.", cols:[
-     ["id","bigint","PK",""],["organismo_id","bigint","FK:organismo","nulo = plantilla general de la plataforma"],["rubro","varchar(120)","","rubro al que aplica"],["nombre","varchar(160)","",""],
+     ["id","bigint","PK",""],["organismo_id","bigint","FK:organismo","nulo = plantilla general de la plataforma"],["seccion","char(1)","FK:actividad_seccion","rubro al que aplica"],["nombre","varchar(160)","",""],
      ["ds_referencia","varchar(20)","","p.ej. DS 44"],["descripcion","text","",""],["vigente","boolean","",""]]},
    {name:"actividad_tipo", desc:"Actividad predefinida dentro de una plantilla.", cols:[
      ["id","bigint","PK",""],["plantilla_id","bigint","FK:programa_plantilla",""],["titulo","varchar(200)","",""],
@@ -232,7 +237,7 @@ const DOMAINS=[
    {name:"material_apoyo", desc:"Biblioteca de material (videos, guías, formatos).", cols:[
      ["id","bigint","PK",""],["organismo_id","bigint","FK:organismo","nulo = material general"],["tipo","enum","","video · guia · formato · otro"],["titulo","varchar(200)","",""],
      ["archivo_key","varchar(300)","","ruta en S3"],["url","varchar(300)","","si es enlace externo"],
-     ["rubro","varchar(120)","","nulo = general"],["descripcion","text","",""]]},
+     ["seccion","char(1)","FK:actividad_seccion","rubro; nulo = todos"],["descripcion","text","",""]]},
    {name:"actividad_material", desc:"Material sugerido para una actividad tipo.", cols:[
      ["id","bigint","PK",""],["actividad_tipo_id","bigint","FK:actividad_tipo",""],["material_id","bigint","FK:material_apoyo",""]]},
    {name:"reunion", desc:"Reunión mensual del comité (DS 44).", cols:[
@@ -359,7 +364,10 @@ const ER=`erDiagram
   COMITE ||--o{ COMISION : organiza
   COMISION ||--o{ COMISION_INTEGRANTE : agrupa
   COMITE_INTEGRANTE ||--o{ COMISION_INTEGRANTE : integra
-  EMPRESA }o--o| PROGRAMA_PLANTILLA : usa_por_rubro
+  ACTIVIDAD_SECCION ||--o{ ACTIVIDAD_ECONOMICA : agrupa
+  ACTIVIDAD_ECONOMICA |o--o{ EMPRESA : clasifica
+  ACTIVIDAD_SECCION ||--o{ PROGRAMA_PLANTILLA : rubro
+  ACTIVIDAD_SECCION |o--o{ MATERIAL_APOYO : rubro
   PROGRAMA_PLANTILLA ||--o{ ACTIVIDAD_TIPO : define
   ACTIVIDAD_TIPO ||--o{ ACTIVIDAD : instancia
   COMITE ||--o{ ACTIVIDAD : ejecuta

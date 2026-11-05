@@ -1,10 +1,11 @@
 -- =============================================================================
 -- Paritario — esquema de base de datos (PostgreSQL 16)
--- Modelo de datos v5.1: 31 tablas en 5 dominios.
+-- Modelo de datos v5.2: 33 tablas en 5 dominios.
 --
 --   01 Organización ........... organismo_administrador, organismo,
 --                               integracion_organismo, empresa,
---                               sucursal, region, comuna
+--                               sucursal, region, comuna,
+--                               actividad_seccion, actividad_economica
 --   02 Comité e integrantes ... comite, persona, comite_integrante, comision,
 --                               comision_integrante
 --   03 Programa y cumplimiento  programa_plantilla, actividad_tipo, actividad,
@@ -174,12 +175,31 @@ CREATE TABLE comuna (
 COMMENT ON TABLE  comuna IS 'Catálogo de comunas. id = código único territorial (CUT) vigente.';
 COMMENT ON COLUMN comuna.codigo IS 'Código en el formato oficial de la SUBDERE: 5 dígitos con cero inicial (01101).';
 
+-- Actividad económica: códigos del SII (6 dígitos) basados en el CIIU4.CL 2012.
+-- La sección (A–U) es el "rubro" de la plataforma: define la plantilla de
+-- programa de trabajo y el material de apoyo que se proponen a la empresa.
+CREATE TABLE actividad_seccion (
+    codigo  char(1) PRIMARY KEY CHECK (codigo ~ '^[A-U]$'),
+    nombre  varchar(200) NOT NULL UNIQUE
+);
+COMMENT ON TABLE actividad_seccion IS 'Secciones del CIIU4.CL 2012 (A–U). Es el rubro de la empresa en la plataforma.';
+
+CREATE TABLE actividad_economica (
+    codigo       char(6) PRIMARY KEY CHECK (codigo ~ '^[0-9]{6}$'),
+    seccion      char(1) NOT NULL REFERENCES actividad_seccion(codigo),
+    grupo        varchar(200) NOT NULL,
+    descripcion  varchar(300) NOT NULL
+);
+COMMENT ON TABLE  actividad_economica IS 'Códigos de actividad económica del SII (CIIU4.CL 2012, 6 dígitos).';
+COMMENT ON COLUMN actividad_economica.grupo IS 'Agrupación con que el SII presenta los códigos.';
+CREATE INDEX actividad_economica_seccion_idx ON actividad_economica (seccion);
+
 CREATE TABLE empresa (
     id                       bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     rut                      rut          NOT NULL UNIQUE,
     razon_social             varchar(200) NOT NULL,
     nombre_fantasia          varchar(200),
-    rubro                    varchar(120),
+    actividad_economica_codigo char(6) REFERENCES actividad_economica(codigo),
     organismo_id             bigint REFERENCES organismo(id),
     organismo_administrador_id smallint REFERENCES organismo_administrador(id),
     plan                     varchar(40),
@@ -188,6 +208,7 @@ CREATE TABLE empresa (
     created_at               timestamptz NOT NULL DEFAULT now()
 );
 COMMENT ON TABLE  empresa IS 'Empresa cliente de la plataforma (tenant).';
+COMMENT ON COLUMN empresa.actividad_economica_codigo IS 'Código de actividad económica principal ante el SII. Su sección es el rubro de la empresa.';
 COMMENT ON COLUMN empresa.organismo_id IS 'Organismo que la entrega en marca blanca; nulo si es cliente directo.';
 COMMENT ON COLUMN empresa.organismo_administrador_id IS 'Organismo administrador al que está adherida la empresa.';
 CREATE INDEX empresa_organismo_idx ON empresa (organismo_id);
@@ -398,7 +419,7 @@ CREATE INDEX log_acceso_entidad_idx ON log_acceso (entidad, entidad_id);
 CREATE TABLE programa_plantilla (
     id             bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     organismo_id   bigint REFERENCES organismo(id),
-    rubro          varchar(120) NOT NULL,
+    seccion        char(1) NOT NULL REFERENCES actividad_seccion(codigo),
     nombre         varchar(160) NOT NULL,
     ds_referencia  varchar(20) DEFAULT 'DS 44',
     descripcion    text,
@@ -406,6 +427,7 @@ CREATE TABLE programa_plantilla (
 );
 COMMENT ON TABLE  programa_plantilla IS 'Programa de trabajo propuesto según rubro.';
 COMMENT ON COLUMN programa_plantilla.organismo_id IS 'Nulo = plantilla general de la plataforma.';
+COMMENT ON COLUMN programa_plantilla.seccion IS 'Rubro (sección CIIU) al que aplica la plantilla.';
 
 CREATE TABLE actividad_tipo (
     id             bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
@@ -427,12 +449,13 @@ CREATE TABLE material_apoyo (
     titulo        varchar(200) NOT NULL,
     archivo_key   varchar(300),
     url           varchar(300),
-    rubro         varchar(120),
+    seccion       char(1) REFERENCES actividad_seccion(codigo),
     descripcion   text,
     CHECK (num_nonnulls(archivo_key, url) >= 1)
 );
 COMMENT ON TABLE  material_apoyo IS 'Biblioteca de material (videos, guías, formatos).';
 COMMENT ON COLUMN material_apoyo.organismo_id IS 'Nulo = material general de la plataforma.';
+COMMENT ON COLUMN material_apoyo.seccion IS 'Rubro (sección CIIU) al que aplica; nulo = todos los rubros.';
 
 CREATE TABLE actividad_material (
     id                 bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,

@@ -2,7 +2,8 @@
 -- Paritario — prueba de aislamiento (Row-Level Security) y reglas de negocio.
 --
 -- Uso, sobre una base de prueba vacía:
---   psql -v ON_ERROR_STOP=1 -f db/schema.sql -f db/seed.sql -f db/test_rls.sql
+--   psql -v ON_ERROR_STOP=1 -f db/schema.sql -f db/seed.sql -f db/seed_comunas.sql \
+--        -f db/seed_actividades.sql -f db/test_rls.sql
 --
 -- Cada verificación que falla aborta el script con un mensaje claro.
 -- Todo corre dentro de una transacción que se revierte al final: no deja datos.
@@ -41,6 +42,13 @@ INSERT INTO empresa (rut, razon_social, organismo_id, organismo_administrador_id
     ('76100200-7', 'Empresa 1', (SELECT id FROM organismo WHERE nombre = 'Mutualidad A'), (SELECT id FROM organismo_administrador WHERE sigla = 'IST')),
     ('76200300-7', 'Empresa 2', (SELECT id FROM organismo WHERE nombre = 'Mutualidad A'), (SELECT id FROM organismo_administrador WHERE sigla = 'IST')),
     ('76300400-7', 'Empresa 3', NULL, (SELECT id FROM organismo_administrador WHERE sigla = 'ACHS'));
+
+-- Empresa 1 es constructora (código SII 410010, sección F) y hay una
+-- plantilla general de programa para construcción y otra para comercio.
+UPDATE empresa SET actividad_economica_codigo = '410010' WHERE razon_social = 'Empresa 1';
+INSERT INTO programa_plantilla (seccion, nombre) VALUES
+    ('F', 'Programa general de construcción'),
+    ('G', 'Programa general de comercio');
 
 INSERT INTO comite (empresa_id, nombre)
 SELECT e.id, v.nombre FROM (VALUES ('Empresa 1','C1'), ('Empresa 1','C2'), ('Empresa 2','C3'), ('Empresa 3','C4')) v(emp, nombre)
@@ -126,6 +134,12 @@ SELECT pg_temp.verificar('empresa 1: documentos', (SELECT count(*) FROM document
 SELECT pg_temp.verificar('empresa 1: no ve la persona de Empresa 2', (SELECT count(*) FROM persona WHERE rut = '12345678-5'), 0);
 SELECT pg_temp.verificar('empresa 1: ve la marca de su organismo', (SELECT count(*) FROM organismo), 1);
 SELECT pg_temp.verificar('empresa 1: no ve integraciones del organismo', (SELECT count(*) FROM integracion_organismo), 0);
+SELECT pg_temp.verificar('empresa 1: su rubro (sección CIIU) es construcción',
+    (SELECT count(*) FROM empresa e JOIN actividad_economica a ON a.codigo = e.actividad_economica_codigo WHERE a.seccion = 'F'), 1);
+SELECT pg_temp.verificar('empresa 1: se le propone solo la plantilla de su rubro',
+    (SELECT count(*) FROM empresa e
+     JOIN actividad_economica a ON a.codigo = e.actividad_economica_codigo
+     JOIN programa_plantilla pp ON pp.seccion = a.seccion), 1);
 
 -- Coordinador de C1: solo su comité.
 SELECT set_config('app.usuario_id', (SELECT id::text FROM t_usuarios WHERE rut = '16161616-8'), true);
@@ -209,6 +223,8 @@ SELECT pg_temp.debe_fallar('coordinador con comité de otra empresa',
        WHERE u.rut = '16161616-8' AND e.razon_social = 'Empresa 1' AND c.nombre = 'C3'$q$);
 SELECT pg_temp.debe_fallar('comisión personalizada sin nombre',
     $q$INSERT INTO comision (comite_id, tipo) SELECT id, 'personalizada' FROM comite WHERE nombre = 'C1'$q$);
+SELECT pg_temp.debe_fallar('empresa con código de actividad inexistente',
+    $q$UPDATE empresa SET actividad_economica_codigo = '999999' WHERE razon_social = 'Empresa 2'$q$);
 SELECT pg_temp.debe_fallar('código SUSESO con formato inválido',
     $q$INSERT INTO organismo_administrador (id, sigla, nombre, tipo, codigo_suseso) VALUES (9, 'X', 'Prueba', 'otro', '31A1')$q$);
 SELECT pg_temp.debe_fallar('transferencia internacional sin salvaguarda',

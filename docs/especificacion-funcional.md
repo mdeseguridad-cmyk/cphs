@@ -41,7 +41,7 @@ El acceso se controla por rol y por ámbito (empresa y/o comité), de modo que n
 
 Permite registrar las empresas cliente y sus centros de trabajo, base sobre la que se constituyen los comités.
 
-- Registrar y mantener empresas cliente (RUT, razón social, rubro, organismo administrador y plan contratado); el rubro determina la plantilla de programa de trabajo propuesta.
+- Registrar y mantener empresas cliente (RUT, razón social, código de actividad económica del SII, organismo administrador y plan contratado); la sección CIIU de ese código es el rubro y determina la plantilla de programa de trabajo propuesta.
 - Administrar centros de trabajo con alias, dirección (región/comuna desde catálogo) y masa de trabajadores.
 - Marcar centros como vigentes o no vigentes, sin eliminarlos, para conservar el historial.
 - Buscar y filtrar centros por nombre, comuna o estado.
@@ -346,7 +346,7 @@ La misma plataforma se ofrece a organismos administradores sin plataforma propia
 Material complementario de este repositorio:
 
 - [Prototipo navegable del sistema](prototipo.html)
-- [Modelo de datos detallado (31 entidades)](modelo-datos.html)
+- [Modelo de datos detallado (33 entidades)](modelo-datos.html)
 - [Anexo de privacidad · Ley 21.719](anexo-privacidad.html)
 - [Diagrama de arquitectura AWS](arquitectura-aws.html)
 - [Esquema de base de datos (PostgreSQL)](../db/schema.sql)

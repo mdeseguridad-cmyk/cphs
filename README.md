@@ -15,12 +15,13 @@ Este repositorio contiene, por ahora, el diseño del producto y el esquema de ba
 | --- | --- |
 | [`docs/especificacion-funcional.md`](docs/especificacion-funcional.md) | Especificación funcional: módulos, roles, requisitos, cumplimiento, roadmap, costos, comparación de nubes y oferta para organismos |
 | [`docs/prototipo.html`](docs/prototipo.html) | Prototipo navegable con datos de ejemplo (incluye el perfil de organismo en marca blanca) |
-| [`docs/modelo-datos.html`](docs/modelo-datos.html) | Modelo de datos v5.1: diagrama entidad-relación y las 31 tablas |
+| [`docs/modelo-datos.html`](docs/modelo-datos.html) | Modelo de datos v5.2: diagrama entidad-relación y las 33 tablas |
 | [`docs/anexo-privacidad.html`](docs/anexo-privacidad.html) | Anexo de privacidad según la Ley 21.719 |
 | [`docs/arquitectura-aws.html`](docs/arquitectura-aws.html) | Arquitectura de referencia en AWS |
-| [`db/schema.sql`](db/schema.sql) | Esquema PostgreSQL 16: 31 tablas, restricciones y seguridad por fila |
+| [`db/schema.sql`](db/schema.sql) | Esquema PostgreSQL 16: 33 tablas, restricciones y seguridad por fila |
 | [`db/seed.sql`](db/seed.sql) | Catálogos base: regiones, organismos administradores con su código SUSESO, roles y niveles de certificación generales |
 | [`db/seed_comunas.sql`](db/seed_comunas.sql) | Las 346 comunas con su código único territorial (CUT) vigente desde 2018 |
+| [`db/seed_actividades.sql`](db/seed_actividades.sql) | Las 21 secciones del CIIU4.CL 2012 y los 674 códigos de actividad económica del SII, verificados contra la tabla oficial de homologación |
 | [`db/test_rls.sql`](db/test_rls.sql) | Prueba del aislamiento entre empresas y organismos, y de las reglas de negocio |
 
 Los archivos HTML se abren directamente en el navegador. El diagrama entidad-relación del modelo de datos carga la librería Mermaid desde cdnjs, así que necesita conexión a internet.
@@ -34,7 +35,7 @@ createdb paritario
 ```
 
 ```bash
-psql -d paritario -v ON_ERROR_STOP=1 -f db/schema.sql -f db/seed.sql -f db/seed_comunas.sql
+psql -d paritario -v ON_ERROR_STOP=1 -f db/schema.sql -f db/seed.sql -f db/seed_comunas.sql -f db/seed_actividades.sql
 ```
 
 Para verificar el aislamiento y las reglas de negocio sobre una base de prueba (el script se revierte al final y no deja datos):
@@ -43,7 +44,7 @@ Para verificar el aislamiento y las reglas de negocio sobre una base de prueba (
 psql -d paritario -v ON_ERROR_STOP=1 -f db/test_rls.sql
 ```
 
-Debe terminar con `Todas las verificaciones pasaron.` Son 39 verificaciones; cualquier falla aborta el script con un mensaje `FALLA: …`.
+Debe terminar con `Todas las verificaciones pasaron.` Son 42 verificaciones; cualquier falla aborta el script con un mensaje `FALLA: …`.
 
 ### Cómo funciona el aislamiento
 
