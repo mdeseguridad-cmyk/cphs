@@ -346,7 +346,7 @@ La misma plataforma se ofrece a organismos administradores sin plataforma propia
 Material complementario de este repositorio:
 
 - [Prototipo navegable del sistema](prototipo.html)
-- [Modelo de datos detallado (30 entidades)](modelo-datos.html)
+- [Modelo de datos detallado (31 entidades)](modelo-datos.html)
 - [Anexo de privacidad · Ley 21.719](anexo-privacidad.html)
 - [Diagrama de arquitectura AWS](arquitectura-aws.html)
 - [Esquema de base de datos (PostgreSQL)](../db/schema.sql)

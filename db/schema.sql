@@ -1,8 +1,9 @@
 -- =============================================================================
 -- Paritario — esquema de base de datos (PostgreSQL 16)
--- Modelo de datos v5: 30 tablas en 5 dominios.
+-- Modelo de datos v5.1: 31 tablas en 5 dominios.
 --
---   01 Organización ........... organismo, integracion_organismo, empresa,
+--   01 Organización ........... organismo_administrador, organismo,
+--                               integracion_organismo, empresa,
 --                               sucursal, region, comuna
 --   02 Comité e integrantes ... comite, persona, comite_integrante, comision,
 --                               comision_integrante
@@ -37,7 +38,6 @@ CREATE TYPE organismo_tipo            AS ENUM ('mutualidad', 'servicio_publico',
 CREATE TYPE organismo_estado          AS ENUM ('activo', 'en_implementacion', 'baja');
 CREATE TYPE integracion_tipo          AS ENUM ('sso', 'adherentes', 'certificacion', 'reportes');
 CREATE TYPE integracion_estado        AS ENUM ('en_prueba', 'activa', 'inactiva');
-CREATE TYPE organismo_administrador   AS ENUM ('achs', 'mutual_de_seguridad', 'ist', 'isl');
 CREATE TYPE empresa_estado            AS ENUM ('activo', 'suspendido', 'baja');
 CREATE TYPE sucursal_estado           AS ENUM ('vigente', 'no_vigente');
 CREATE TYPE comite_estado             AS ENUM ('activo', 'baja');
@@ -111,11 +111,23 @@ $$;
 -- 01 · Organización
 -- =============================================================================
 
+-- Organismos administradores del seguro de la Ley 16.744 (catálogo).
+CREATE TABLE organismo_administrador (
+    id             smallint PRIMARY KEY,
+    sigla          varchar(10)  NOT NULL UNIQUE,
+    nombre         varchar(120) NOT NULL UNIQUE,
+    tipo           organismo_tipo NOT NULL,
+    codigo_suseso  char(4) UNIQUE CHECK (codigo_suseso ~ '^[0-9]{4}$')
+);
+COMMENT ON TABLE  organismo_administrador IS 'Organismos administradores del seguro de la Ley 16.744 (mutualidades e ISL).';
+COMMENT ON COLUMN organismo_administrador.codigo_suseso IS 'Código de identificación de la SUSESO (Compendio, remisión de antecedentes a la Dirección del Trabajo). Nulo si no tiene uno asignado.';
+
 CREATE TABLE organismo (
     id                bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     rut               rut          NOT NULL UNIQUE,
     nombre            varchar(200) NOT NULL,
     tipo              organismo_tipo NOT NULL,
+    organismo_administrador_id smallint REFERENCES organismo_administrador(id),
     marca_nombre      varchar(120) NOT NULL,
     logo_key          varchar(300),
     color_primario    varchar(7)   CHECK (color_primario ~ '^#[0-9A-Fa-f]{6}$'),
@@ -124,7 +136,8 @@ CREATE TABLE organismo (
     estado            organismo_estado NOT NULL DEFAULT 'en_implementacion',
     fecha_contrato    date
 );
-COMMENT ON TABLE organismo IS 'Organismo administrador que contrata la plataforma en marca blanca.';
+COMMENT ON TABLE  organismo IS 'Organismo que contrata la plataforma en marca blanca.';
+COMMENT ON COLUMN organismo.organismo_administrador_id IS 'Si el organismo contratante es un organismo administrador de la Ley 16.744, cuál es.';
 
 CREATE TABLE integracion_organismo (
     id                     bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
@@ -168,7 +181,7 @@ CREATE TABLE empresa (
     nombre_fantasia          varchar(200),
     rubro                    varchar(120),
     organismo_id             bigint REFERENCES organismo(id),
-    organismo_administrador  organismo_administrador,
+    organismo_administrador_id smallint REFERENCES organismo_administrador(id),
     plan                     varchar(40),
     estado                   empresa_estado NOT NULL DEFAULT 'activo',
     fecha_alta               date NOT NULL DEFAULT current_date,
@@ -176,7 +189,7 @@ CREATE TABLE empresa (
 );
 COMMENT ON TABLE  empresa IS 'Empresa cliente de la plataforma (tenant).';
 COMMENT ON COLUMN empresa.organismo_id IS 'Organismo que la entrega en marca blanca; nulo si es cliente directo.';
-COMMENT ON COLUMN empresa.organismo_administrador IS 'Mutualidad u organismo al que está adherida (informativo).';
+COMMENT ON COLUMN empresa.organismo_administrador_id IS 'Organismo administrador al que está adherida la empresa.';
 CREATE INDEX empresa_organismo_idx ON empresa (organismo_id);
 
 CREATE TABLE sucursal (

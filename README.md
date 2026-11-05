@@ -15,11 +15,11 @@ Este repositorio contiene, por ahora, el diseño del producto y el esquema de ba
 | --- | --- |
 | [`docs/especificacion-funcional.md`](docs/especificacion-funcional.md) | Especificación funcional: módulos, roles, requisitos, cumplimiento, roadmap, costos, comparación de nubes y oferta para organismos |
 | [`docs/prototipo.html`](docs/prototipo.html) | Prototipo navegable con datos de ejemplo (incluye el perfil de organismo en marca blanca) |
-| [`docs/modelo-datos.html`](docs/modelo-datos.html) | Modelo de datos v5: diagrama entidad-relación y las 30 tablas |
+| [`docs/modelo-datos.html`](docs/modelo-datos.html) | Modelo de datos v5.1: diagrama entidad-relación y las 31 tablas |
 | [`docs/anexo-privacidad.html`](docs/anexo-privacidad.html) | Anexo de privacidad según la Ley 21.719 |
 | [`docs/arquitectura-aws.html`](docs/arquitectura-aws.html) | Arquitectura de referencia en AWS |
-| [`db/schema.sql`](db/schema.sql) | Esquema PostgreSQL 16: tablas, restricciones y seguridad por fila |
-| [`db/seed.sql`](db/seed.sql) | Catálogos base: regiones, roles y niveles de certificación generales |
+| [`db/schema.sql`](db/schema.sql) | Esquema PostgreSQL 16: 31 tablas, restricciones y seguridad por fila |
+| [`db/seed.sql`](db/seed.sql) | Catálogos base: regiones, organismos administradores con su código SUSESO, roles y niveles de certificación generales |
 | [`db/seed_comunas.sql`](db/seed_comunas.sql) | Las 346 comunas con su código único territorial (CUT) vigente desde 2018 |
 | [`db/test_rls.sql`](db/test_rls.sql) | Prueba del aislamiento entre empresas y organismos, y de las reglas de negocio |
 
@@ -43,7 +43,7 @@ Para verificar el aislamiento y las reglas de negocio sobre una base de prueba (
 psql -d paritario -v ON_ERROR_STOP=1 -f db/test_rls.sql
 ```
 
-Debe terminar con `Todas las verificaciones pasaron.` Son 36 verificaciones; cualquier falla aborta el script con un mensaje `FALLA: …`.
+Debe terminar con `Todas las verificaciones pasaron.` Son 39 verificaciones; cualquier falla aborta el script con un mensaje `FALLA: …`.
 
 ### Cómo funciona el aislamiento
 
@@ -76,5 +76,6 @@ Las vistas `v_cumplimiento_reuniones` y `v_paridad_comite` calculan el cumplimie
 
 ### Pendiente en la base de datos
 
+- Confirmar los códigos SUSESO de los organismos administradores (3111 ACHS, 3112 IST, 3113 Mutual de Seguridad) contra el texto vigente del Compendio, y si existe un código para el ISL. Se tomaron de búsquedas sobre el Compendio, sin acceso directo al documento.
 - Definir los plazos de `politica_retencion` con asesoría legal.
 - Las funciones de ámbito devuelven arreglos de ids; con miles de empresas por organismo conviene revisar su rendimiento con datos reales.

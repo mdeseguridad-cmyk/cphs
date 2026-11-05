@@ -24,6 +24,17 @@ INSERT INTO region (id, nombre, orden) VALUES
     (11, 'Aisén del General Carlos Ibáñez del Campo', 15),
     (12, 'Magallanes y de la Antártica Chilena', 16);
 
+-- Organismos administradores del seguro de la Ley 16.744.
+-- codigo_suseso: códigos de identificación del Compendio de Normas de la
+-- SUSESO, sección "Remisión de antecedentes a la Dirección del Trabajo"
+-- (Anexos N°39 y N°40). Esa codificación no asigna código al ISL.
+-- Pendiente: confirmar los códigos contra el texto vigente del Compendio.
+INSERT INTO organismo_administrador (id, sigla, nombre, tipo, codigo_suseso) VALUES
+    (1, 'ACHS',  'Asociación Chilena de Seguridad', 'mutualidad', '3111'),
+    (2, 'IST',   'Instituto de Seguridad del Trabajo', 'mutualidad', '3112'),
+    (3, 'MUSEG', 'Mutual de Seguridad de la Cámara Chilena de la Construcción', 'mutualidad', '3113'),
+    (4, 'ISL',   'Instituto de Seguridad Laboral', 'servicio_publico', NULL);
+
 -- Comunas: en db/seed_comunas.sql (346 comunas con su código único territorial).
 
 -- Roles del sistema.

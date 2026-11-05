@@ -97,9 +97,9 @@
 
 <div class="page">
   <header class="hero">
-    <div class="eyebrow">Especificación técnica · v5</div>
+    <div class="eyebrow">Especificación técnica · v5.1</div>
     <h1>Modelo de datos · Sistema de Comités Paritarios</h1>
-    <p>Esquema relacional de <b>Paritario</b>, plataforma independiente para gestionar Comités Paritarios de Higiene y Seguridad. Funciona en dos modos: <b>venta directa</b> a empresas y <b>marca blanca</b> para organismos administradores (mutualidades o servicios públicos) que entregan la plataforma a sus empresas adherentes con su propia marca. <b>30 entidades</b> en cinco dominios, alineado al <b>DS 44/2024</b> y preparado para la <b>Ley 21.719</b> de protección de datos, con paridad funcional sobre plataformas de referencia del mercado (comisiones, programa de trabajo por rubro, material de apoyo, autoservicio de accesos). Tipos en notación PostgreSQL; aplican igual a SQL Server con equivalencias menores. Las entidades marcadas <span class="tag-new" style="margin:0">nuevo</span> son las sumadas en esta versión.</p>
+    <p>Esquema relacional de <b>Paritario</b>, plataforma independiente para gestionar Comités Paritarios de Higiene y Seguridad. Funciona en dos modos: <b>venta directa</b> a empresas y <b>marca blanca</b> para organismos administradores (mutualidades o servicios públicos) que entregan la plataforma a sus empresas adherentes con su propia marca. <b>31 entidades</b> en cinco dominios, alineado al <b>DS 44/2024</b> y preparado para la <b>Ley 21.719</b> de protección de datos, con paridad funcional sobre plataformas de referencia del mercado (comisiones, programa de trabajo por rubro, material de apoyo, autoservicio de accesos). Tipos en notación PostgreSQL; aplican igual a SQL Server con equivalencias menores. Las entidades marcadas <span class="tag-new" style="margin:0">nuevo</span> son las sumadas en esta versión.</p>
     <div class="toolbar">
       <div class="legend">
         <span class="lg"><span class="kbadge kpk">PK</span>llave primaria</span>
@@ -139,7 +139,7 @@
     </ul></div>
   </section>
 
-  <footer>Especificación v5 · producto independiente con marca blanca para organismos · datos y nombres de ejemplo · notación PostgreSQL 16 · paridad funcional de mercado, identidad propia.</footer>
+  <footer>Especificación v5.1 · producto independiente con marca blanca para organismos · datos y nombres de ejemplo · notación PostgreSQL 16 · paridad funcional de mercado, identidad propia.</footer>
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/mermaid/10.9.1/mermaid.min.js"></script>
@@ -150,15 +150,20 @@
 const DOMAINS=[
  {n:"01", t:"Organización", s:"Organismos administradores, empresas y centros de trabajo.",
   ents:[
-   {name:"organismo", desc:"Organismo administrador que contrata la plataforma en marca blanca.", isNew:true, cols:[
+   {name:"organismo_administrador", desc:"Catálogo de organismos administradores de la Ley 16.744.", isNew:true, cols:[
+     ["id","smallint","PK",""],["sigla","varchar(10)","UQ","ACHS · IST · MUSEG · ISL"],["nombre","varchar(120)","UQ",""],
+     ["tipo","enum","","mutualidad · servicio_publico"],
+     ["codigo_suseso","char(4)","UQ","código de identificación SUSESO (3111, 3112, 3113); nulo para el ISL"]]},
+   {name:"organismo", desc:"Organismo que contrata la plataforma en marca blanca.", cols:[
      ["id","bigint","PK",""],["rut","varchar(12)","UQ",""],["nombre","varchar(200)","","nombre legal"],
      ["tipo","enum","","mutualidad · servicio_publico · otro"],
+     ["organismo_administrador_id","smallint","FK:organismo_administrador","si es un organismo administrador, cuál"],
      ["marca_nombre","varchar(120)","","nombre que ven sus empresas"],["logo_key","varchar(300)","","logo en S3"],
      ["color_primario","varchar(7)","","color de marca (#RRGGBB)"],
      ["dominio","varchar(160)","UQ","dominio propio, p. ej. comites.organismo.cl"],
      ["correo_remitente","varchar(160)","","remitente de notificaciones"],
      ["estado","enum","","activo · en_implementacion · baja"],["fecha_contrato","date","",""]]},
-   {name:"integracion_organismo", desc:"Conexión con sistemas del organismo.", isNew:true, cols:[
+   {name:"integracion_organismo", desc:"Conexión con sistemas del organismo.", cols:[
      ["id","bigint","PK",""],["organismo_id","bigint","FK:organismo",""],
      ["tipo","enum","","sso · adherentes · certificacion · reportes"],
      ["protocolo","varchar(30)","","SAML · OIDC · API REST · SFTP"],
@@ -169,7 +174,7 @@ const DOMAINS=[
      ["razon_social","varchar(200)","","Razón social legal"],["nombre_fantasia","varchar(200)","",""],
      ["rubro","varchar(120)","","Actividad económica — define la plantilla de programa"],
      ["organismo_id","bigint","FK:organismo","organismo que la entrega; nulo si es cliente directo"],
-     ["organismo_administrador","enum","","ACHS · Mutual de Seguridad · IST · ISL (informativo)"],
+     ["organismo_administrador_id","smallint","FK:organismo_administrador","organismo al que está adherida"],
      ["plan","varchar(40)","","plan contratado"],
      ["estado","enum","","activo · suspendido · baja"],["fecha_alta","date","",""],["created_at","timestamptz","",""]]},
    {name:"sucursal", desc:"Centro de trabajo donde se constituye un comité.", cols:[
@@ -337,6 +342,8 @@ DOMAINS.forEach(d=>{
 const ER=`erDiagram
   REGION ||--o{ COMUNA : contiene
   COMUNA ||--o{ SUCURSAL : ubica
+  ORGANISMO_ADMINISTRADOR |o--o{ EMPRESA : adhiere
+  ORGANISMO_ADMINISTRADOR |o--o| ORGANISMO : es
   ORGANISMO |o--o{ EMPRESA : entrega_a
   ORGANISMO ||--o{ INTEGRACION_ORGANISMO : configura
   ORGANISMO |o--o{ PROGRAMA_PLANTILLA : aporta

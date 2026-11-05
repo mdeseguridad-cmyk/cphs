@@ -34,10 +34,13 @@ INSERT INTO organismo (rut, nombre, tipo, marca_nombre, color_primario, dominio)
     ('70015580-3', 'Mutualidad A', 'mutualidad', 'Comités A', '#2563eb', 'comites.a.cl'),
     ('70016330-K', 'Servicio B',   'servicio_publico', 'Comités B', '#0f766e', 'comites.b.cl');
 
-INSERT INTO empresa (rut, razon_social, organismo_id) VALUES
-    ('76100200-7', 'Empresa 1', (SELECT id FROM organismo WHERE nombre = 'Mutualidad A')),
-    ('76200300-7', 'Empresa 2', (SELECT id FROM organismo WHERE nombre = 'Mutualidad A')),
-    ('76300400-7', 'Empresa 3', NULL);
+UPDATE organismo SET organismo_administrador_id = (SELECT id FROM organismo_administrador WHERE sigla = 'IST')
+WHERE nombre = 'Mutualidad A';
+
+INSERT INTO empresa (rut, razon_social, organismo_id, organismo_administrador_id) VALUES
+    ('76100200-7', 'Empresa 1', (SELECT id FROM organismo WHERE nombre = 'Mutualidad A'), (SELECT id FROM organismo_administrador WHERE sigla = 'IST')),
+    ('76200300-7', 'Empresa 2', (SELECT id FROM organismo WHERE nombre = 'Mutualidad A'), (SELECT id FROM organismo_administrador WHERE sigla = 'IST')),
+    ('76300400-7', 'Empresa 3', NULL, (SELECT id FROM organismo_administrador WHERE sigla = 'ACHS'));
 
 INSERT INTO comite (empresa_id, nombre)
 SELECT e.id, v.nombre FROM (VALUES ('Empresa 1','C1'), ('Empresa 1','C2'), ('Empresa 2','C3'), ('Empresa 3','C4')) v(emp, nombre)
@@ -135,6 +138,9 @@ SELECT pg_temp.verificar('empresa 3: empresas', (SELECT count(*) FROM empresa), 
 SELECT pg_temp.verificar('empresa 3: comités', (SELECT count(*) FROM comite), 1);
 SELECT pg_temp.verificar('empresa 3: organismos', (SELECT count(*) FROM organismo), 0);
 SELECT pg_temp.verificar('empresa 3: no ve comités de otras empresas', (SELECT count(*) FROM comite WHERE nombre IN ('C1','C2','C3')), 0);
+SELECT pg_temp.verificar('catálogo de organismos administradores visible para todos', (SELECT count(*) FROM organismo_administrador), 4);
+SELECT pg_temp.verificar('empresa 3: su organismo administrador es ACHS (3111)',
+    (SELECT count(*) FROM empresa e JOIN organismo_administrador oa ON oa.id = e.organismo_administrador_id WHERE oa.codigo_suseso = '3111'), 1);
 
 -- Escritura: el administrador de Empresa 3 puede crear un comité en su empresa…
 SELECT set_config('app.usuario_id', (SELECT id::text FROM t_usuarios WHERE rut = '17171717-5'), true);
@@ -203,6 +209,8 @@ SELECT pg_temp.debe_fallar('coordinador con comité de otra empresa',
        WHERE u.rut = '16161616-8' AND e.razon_social = 'Empresa 1' AND c.nombre = 'C3'$q$);
 SELECT pg_temp.debe_fallar('comisión personalizada sin nombre',
     $q$INSERT INTO comision (comite_id, tipo) SELECT id, 'personalizada' FROM comite WHERE nombre = 'C1'$q$);
+SELECT pg_temp.debe_fallar('código SUSESO con formato inválido',
+    $q$INSERT INTO organismo_administrador (id, sigla, nombre, tipo, codigo_suseso) VALUES (9, 'X', 'Prueba', 'otro', '31A1')$q$);
 SELECT pg_temp.debe_fallar('transferencia internacional sin salvaguarda',
     $q$INSERT INTO encargado_tratamiento (nombre, tipo, pais, transferencia_internacional)
        VALUES ('Nube', 'nube', 'Brasil', true)$q$);
