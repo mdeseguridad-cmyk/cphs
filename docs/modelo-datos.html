@@ -97,7 +97,7 @@
 
 <div class="page">
   <header class="hero">
-    <div class="eyebrow">Especificación técnica · v5.4</div>
+    <div class="eyebrow">Especificación técnica · v5.5</div>
     <h1>Modelo de datos · Sistema de Comités Paritarios</h1>
     <p>Esquema relacional de <b>Paritario</b>, plataforma independiente para gestionar Comités Paritarios de Higiene y Seguridad. Funciona en dos modos: <b>venta directa</b> a empresas y <b>marca blanca</b> para organismos administradores (mutualidades o servicios públicos) que entregan la plataforma a sus empresas adherentes con su propia marca. <b>38 entidades</b> en cinco dominios, alineado al <b>DS 44/2024</b> y preparado para la <b>Ley 21.719</b> de protección de datos, con paridad funcional sobre plataformas de referencia del mercado (comisiones, programa de trabajo por rubro, material de apoyo, autoservicio de accesos). Tipos en notación PostgreSQL; aplican igual a SQL Server con equivalencias menores. Las entidades marcadas <span class="tag-new" style="margin:0">nuevo</span> son las sumadas en esta versión.</p>
     <div class="toolbar">
@@ -135,11 +135,13 @@
       <li><b>Roles de organismo.</b> <code>ADMIN_ORGANISMO</code> administra la marca, las integraciones y ve reportes consolidados de todas sus empresas; <code>ASESOR_ORGANISMO</code> (p. ej. experto en prevención) acompaña a las empresas que tiene asignadas.</li>
       <li><b>Historial, no sobrescritura.</b> Integrantes, reuniones, actividades y auditorías se versionan por fechas; la baja de un comité se marca con estado y fecha, nunca se borra, para mantener la trazabilidad legal. <code>log_acceso</code> registra los accesos a datos personales (Ley 21.719).</li>
       <li><b>Preparado para la Ley 21.719.</b> El dominio 05 agrega <code>solicitud_derecho_titular</code> (derechos ARCOP), <code>politica_retencion</code> (conservación vs. supresión), <code>registro_incidente</code> (notificación de brechas) y <code>encargado_tratamiento</code> (contratos de encargo y transferencia internacional). La base de licitud es el <b>cumplimiento de obligación legal</b> (Ley 16.744 y DS 44), no el consentimiento.</li>
+      <li><b>Sin contraseñas en la base (v5.5).</b> La identidad la gestiona Cognito: <code>usuario</code> guarda el RUT (nombre de usuario) y el identificador de la cuenta (<code>cognito_sub</code>), nunca una clave. Un usuario invitado pasa a activo en su primer ingreso; uno bloqueado nunca se borra. La aplicación tampoco usa clave para conectarse a la base: entra con tokens de IAM.</li>
+      <li><b>Documentos directo a S3 (v5.5).</b> El navegador sube y baja los archivos con URL firmadas, sin pasar por la API. <code>documento</code> nace <code>pendiente</code> y pasa a <code>disponible</code> cuando la API confirma el objeto, con su huella SHA-256, su tamaño y la versión del bucket versionado.</li>
       <li><b>Datos sensibles identificados.</b> <code>documento.contiene_datos_sensibles</code> marca los archivos con datos de salud (investigación de accidentes y enfermedades profesionales), que reciben acceso reforzado y una retención propia en <code>politica_retencion</code>.</li>
     </ul></div>
   </section>
 
-  <footer>Especificación v5.4 · producto independiente con marca blanca para organismos · datos y nombres de ejemplo · notación PostgreSQL 16 · paridad funcional de mercado, identidad propia.</footer>
+  <footer>Especificación v5.5 · producto independiente con marca blanca para organismos · datos y nombres de ejemplo · notación PostgreSQL 16 · paridad funcional de mercado, identidad propia.</footer>
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/mermaid/10.9.1/mermaid.min.js"></script>
@@ -253,7 +255,10 @@ const DOMAINS=[
      ["id","bigint","PK",""],["comite_id","bigint","FK:comite",""],
      ["tipo","enum","","constitucion · reunion · disolucion · capacitacion · otro"],
      ["nombre","varchar(200)","",""],["archivo_key","varchar(300)","","ruta en S3"],
-     ["mime","varchar(80)","",""],["tamano_bytes","bigint","",""],
+     ["archivo_version","varchar(200)","","versión del objeto en S3 (v5.5)"],
+     ["estado","enum","","pendiente · disponible: subida directa con URL firmada (v5.5)"],
+     ["sha256","char(64)","","huella para verificar integridad (v5.5)"],
+     ["mime","varchar(80)","",""],["tamano_bytes","bigint","","obligatorio si está disponible"],
      ["fecha_documento","date","",""],["fecha_carga","timestamptz","",""],
      ["contiene_datos_sensibles","boolean","","salud: investigación de accidentes (nuevo)"],
      ["vigente","boolean","",""],["cargado_por","bigint","FK:usuario",""]]},
@@ -296,10 +301,10 @@ const DOMAINS=[
   ]},
  {n:"04", t:"Seguridad y acceso", s:"Usuarios, roles con ámbito, autoservicio y bitácora.",
   ents:[
-   {name:"usuario", desc:"Credencial de acceso al sistema.", cols:[
+   {name:"usuario", desc:"Cuenta de acceso. Contraseñas y MFA los gestiona Cognito: aquí no se guarda ninguna clave.", cols:[
      ["id","bigint","PK",""],["persona_id","bigint","FK:persona","nulo para cuentas de servicio"],
-     ["rut","varchar(12)","UQ","identificador de login"],["password_hash","varchar(255)","",""],
-     ["estado","enum","","activo · bloqueado"],["mfa_habilitado","boolean","",""],["ultimo_acceso","timestamptz","",""],["created_at","timestamptz","",""]]},
+     ["rut","varchar(12)","UQ","nombre de usuario en Cognito"],["cognito_sub","uuid","UQ","cuenta en Cognito; se completa en el primer ingreso (v5.5)"],
+     ["estado","enum","","invitado · activo · bloqueado; activo exige cognito_sub (v5.5)"],["mfa_habilitado","boolean","","copia informativa de Cognito"],["ultimo_acceso","timestamptz","",""],["created_at","timestamptz","",""]]},
    {name:"rol", desc:"Rol funcional del sistema.", cols:[
      ["id","smallint","PK",""],["codigo","varchar(20)","UQ","ADMIN_ORGANISMO · ASESOR_ORGANISMO · ADMIN_EMPRESA · COORDINADOR · AUDITOR"],["nombre","varchar(80)","",""],["descripcion","varchar(200)","",""]]},
    {name:"usuario_rol", desc:"Asignación de rol CON ámbito — clave del control de acceso.", cols:[

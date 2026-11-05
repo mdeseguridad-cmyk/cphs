@@ -725,6 +725,75 @@ function vMarca(){
     </div>`;
 }
 
+/* ---------- usuarios ---------- */
+// Las cuentas viven en el servicio de identidad (Cognito): Paritario no guarda
+// contraseñas. Invitar = la API encola el alta; un proceso aparte crea la cuenta
+// y Cognito envía el correo con la clave temporal.
+const USERS={
+  empresa:[
+    {n:"María José Soto",rut:"12.345.678-5",rol:"Administrador",amb:"Toda la empresa",est:"activo",mfa:true,ult:"hoy, 09:12"},
+    {n:"Jorge Valdés",rut:"9.876.543-3",rol:"Coordinador de comité",amb:"CPHS Planta Antofagasta",est:"activo",mfa:false,ult:"ayer"},
+    {n:"Andrea Pizarro",rut:"16.432.110-k",rol:"Auditor",amb:"Toda la empresa",est:"invitado",mfa:false,ult:null,env:"hace 2 días"},
+    {n:"Luis Contreras",rut:"11.222.333-9",rol:"Coordinador de comité",amb:"CPHS Sucursal Valparaíso",est:"bloqueado",mfa:true,ult:"hace 4 meses"},
+  ],
+  organismo:[
+    {n:"Patricia Rojas",rut:"10.111.222-5",rol:"Administrador de organismo",amb:"Todo el organismo",est:"activo",mfa:true,ult:"hoy, 08:40"},
+    {n:"Felipe Araya",rut:"14.555.666-k",rol:"Asesor de organismo",amb:"Todo el organismo",est:"activo",mfa:true,ult:"hace 3 días"},
+    {n:"Daniela Muñoz",rut:"18.777.888-3",rol:"Asesor de organismo",amb:"Todo el organismo",est:"invitado",mfa:false,ult:null,env:"hoy"},
+  ]};
+const EST_U={activo:["Activo","ok"],invitado:["Invitación enviada","warn"],enviando:["Enviando invitación…","mut"],bloqueado:["Bloqueado","crit"]};
+function rutOk(r){const t=String(r).replace(/[.\s]/g,"").toLowerCase();const m=t.match(/^(\d{7,8})-([\dk])$/);if(!m)return false;
+  let s=0,f=2;for(const d of m[1].split("").reverse()){s+=+d*f;f=f===7?2:f+1;}const v=11-s%11;return m[2]===(v===11?"0":v===10?"k":String(v));}
+function vUsuarios(){
+  const org=ROLE==="organismo", list=USERS[ROLE];
+  const roles=org?["Administrador de organismo","Asesor de organismo"]:["Administrador","Coordinador de comité","Auditor"];
+  const ambs=org?["Todo el organismo"]:["Toda la empresa",...comites.filter(c=>c.estado!=="baja").map(c=>c.name)];
+  wrap.innerHTML=`<div class="ph"><div><h1>Usuarios y roles</h1><p>${org?esc(ORG.nombre)+" · cuentas del organismo":"Cuentas, perfiles y permisos de tu empresa"} · datos de ejemplo</p></div>
+      <button class="btn" id="uInv"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>Invitar usuario</button></div>
+    <div class="notice info"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="10" width="16" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg>
+      <span>Paritario no guarda contraseñas. Al invitar, la persona recibe un correo con una clave temporal, define la suya en el primer ingreso y puede activar la verificación en dos pasos (MFA). Para entrar usa su RUT.</span></div>
+    <div class="card" id="uForm" hidden><div class="card-h"><h3>Invitar usuario</h3></div><div class="card-b" style="padding-top:14px">
+      <div class="fgrid">
+        <div class="fld"><label for="u-n">Nombre</label><input id="u-n" autocomplete="off"></div>
+        <div class="fld"><label for="u-rut">RUT</label><input id="u-rut" placeholder="12.345.678-5" autocomplete="off"><span class="hint" id="u-rut-h">Será su nombre de usuario</span></div>
+        <div class="fld"><label for="u-mail">Correo</label><input id="u-mail" type="email" placeholder="nombre@empresa.cl" autocomplete="off"></div>
+        <div class="fld"><label for="u-rol">Rol</label><select id="u-rol">${roles.map(r=>`<option>${esc(r)}</option>`).join("")}</select></div>
+        <div class="fld full"><label for="u-amb">Ámbito</label><select id="u-amb">${ambs.map(a=>`<option>${esc(a)}</option>`).join("")}</select></div>
+      </div>
+      <div class="addrow" style="justify-content:flex-end"><button class="btn ghost sm" id="uCancel">Cancelar</button><button class="btn sm" id="uSend">Enviar invitación</button></div>
+    </div></div>
+    <div class="card"><div class="tablewrap"><table>
+      <thead><tr><th>Persona</th><th>RUT</th><th>Rol</th><th>Ámbito</th><th>Estado</th><th>MFA</th><th>Último ingreso</th><th></th></tr></thead>
+      <tbody id="urows"></tbody></table></div></div>
+    <p class="segtip" style="margin-top:12px">Bloquear una cuenta cierra sus sesiones abiertas. Las cuentas nunca se borran: el historial de actas y auditorías conserva quién hizo cada cosa.</p>`;
+  const act=u=>u.est==="invitado"?`<button class="btn ghost sm" data-ure="1">Reenviar invitación</button>`
+    :u.est==="activo"?`<button class="btn ghost sm" data-ublk="1">Bloquear</button>`
+    :u.est==="bloqueado"?`<button class="btn ghost sm" data-udes="1">Desbloquear</button>`:"";
+  const draw=()=>{$("#urows").innerHTML=list.map((u,i)=>{const e=EST_U[u.est];
+    return `<tr data-ui="${i}"><td class="cname">${esc(u.n)}</td><td class="num mono" style="color:var(--muted);white-space:nowrap">${esc(u.rut)}</td><td>${esc(u.rol)}</td>
+      <td style="color:var(--muted)">${esc(u.amb)}</td><td><span class="chip ${e[1]}">${e[0]}</span>${u.est==="invitado"&&u.env?`<div class="csub" style="margin-top:3px">enviada ${esc(u.env)}</div>`:""}</td>
+      <td>${u.est==="invitado"||u.est==="enviando"?'<span style="color:var(--faint)">—</span>':u.mfa?'<span class="chip ok">Activa</span>':'<span class="chip mut">No</span>'}</td>
+      <td class="csub">${u.ult?esc(u.ult):"Aún no ingresa"}</td><td style="white-space:nowrap;text-align:right">${act(u)}</td></tr>`;}).join("");};
+  const enviar=u=>{u.est="enviando";draw();setTimeout(()=>{u.est="invitado";u.env="ahora";if($("#urows"))draw();},1400);};
+  draw();
+  const form=$("#uForm");
+  $("#uInv").onclick=()=>{form.hidden=false;$("#u-n").focus();};
+  $("#uCancel").onclick=()=>{form.hidden=true;};
+  $("#u-rut").oninput=()=>{const v=$("#u-rut").value.trim(),h=$("#u-rut-h");
+    if(!v){h.textContent="Será su nombre de usuario";h.style.color="";}
+    else if(rutOk(v)){h.textContent="RUT válido";h.style.color="var(--ok)";}
+    else{h.textContent="RUT o dígito verificador no válido";h.style.color="var(--crit)";}};
+  $("#uSend").onclick=()=>{const n=$("#u-n").value.trim(),r=$("#u-rut").value.trim(),m=$("#u-mail").value.trim();
+    if(!n||!rutOk(r)||!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(m)){$("#u-rut").oninput();if(!n)$("#u-n").focus();else if(!rutOk(r))$("#u-rut").focus();else $("#u-mail").focus();return;}
+    if(list.some(u=>u.rut.replace(/\./g,"").toLowerCase()===r.replace(/\./g,"").toLowerCase())){const h=$("#u-rut-h");h.textContent="Ya existe una cuenta con este RUT";h.style.color="var(--crit)";return;}
+    const u={n,rut:r,rol:$("#u-rol").value,amb:$("#u-amb").value,est:"enviando",mfa:false,ult:null};
+    list.unshift(u);form.hidden=true;["#u-n","#u-rut","#u-mail"].forEach(x=>$(x).value="");$("#u-rut").oninput();enviar(u);};
+  $("#urows").onclick=e=>{const tr=e.target.closest("[data-ui]");if(!tr)return;const u=list[+tr.dataset.ui];
+    if(e.target.closest("[data-ure]"))enviar(u);
+    else if(e.target.closest("[data-ublk]")){u.est="bloqueado";draw();}
+    else if(e.target.closest("[data-udes]")){u.est="activo";draw();}};
+}
+
 function vSimple(title,sub,icon){
   wrap.innerHTML=`<div class="ph"><div><h1>${title}</h1><p>${sub}</p></div></div>
     <div class="card"><div class="card-b"><div class="empty">
@@ -745,7 +814,7 @@ function go(view,arg){
     reuniones:()=>vSimple("Reuniones","Calendario y actas de todas las reuniones",'<rect x="3" y="4.5" width="18" height="17" rx="2.5"/><path d="M3 9h18M8 2.5v4M16 2.5v4"/>'),
     cert:()=>vSimple("Certificación","Auditorías y niveles de certificación",'<circle cx="12" cy="9" r="5.5"/><path d="M8.5 13.5L7 22l5-2.5L17 22l-1.5-8.5"/>'),
     centros:()=>vSimple("Centros de trabajo","Centros de trabajo de la empresa, con alias y dotación",'<path d="M3 21V7l9-4 9 4v14"/><path d="M9 21v-6h6v6"/>'),
-    usuarios:()=>vSimple("Usuarios y roles","Cuentas, perfiles y permisos (Administrador, Coordinador, Auditor)",'<circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/>'),
+    usuarios:vUsuarios,
   }[view]||vDashboard)();
   window.scrollTo(0,0);
 }

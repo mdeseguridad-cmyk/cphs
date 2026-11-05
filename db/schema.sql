@@ -1,6 +1,6 @@
 -- =============================================================================
 -- Paritario — esquema de base de datos (PostgreSQL 16)
--- Modelo de datos v5.4: 38 tablas en 5 dominios.
+-- Modelo de datos v5.5: 38 tablas en 5 dominios.
 --
 --   01 Organización ........... organismo_administrador, organismo,
 --                               integracion_organismo, empresa,
@@ -59,7 +59,8 @@ CREATE TYPE reunion_estado            AS ENUM ('planificada', 'realizada', 'no_r
 CREATE TYPE documento_tipo            AS ENUM ('constitucion', 'reunion', 'disolucion', 'capacitacion',
                                                'investigacion', 'informe_auditoria', 'otro');
 CREATE TYPE auditoria_estado          AS ENUM ('pendiente', 'aprobada', 'rechazada');
-CREATE TYPE usuario_estado            AS ENUM ('activo', 'bloqueado');
+CREATE TYPE usuario_estado            AS ENUM ('invitado', 'activo', 'bloqueado');
+CREATE TYPE documento_estado          AS ENUM ('pendiente', 'disponible');
 CREATE TYPE solicitud_estado          AS ENUM ('pendiente', 'aprobada', 'rechazada');
 CREATE TYPE log_accion                AS ENUM ('login', 'ver', 'crear', 'editar', 'eliminar', 'exportar');
 CREATE TYPE derecho_tipo              AS ENUM ('acceso', 'rectificacion', 'supresion', 'oposicion', 'portabilidad');
@@ -334,14 +335,18 @@ CREATE TABLE usuario (
     id              bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     persona_id      bigint REFERENCES persona(id),
     rut             rut NOT NULL UNIQUE,
-    password_hash   varchar(255),
-    estado          usuario_estado NOT NULL DEFAULT 'activo',
+    cognito_sub     uuid UNIQUE,
+    estado          usuario_estado NOT NULL DEFAULT 'invitado',
     mfa_habilitado  boolean NOT NULL DEFAULT false,
     ultimo_acceso   timestamptz,
-    created_at      timestamptz NOT NULL DEFAULT now()
+    created_at      timestamptz NOT NULL DEFAULT now(),
+    CHECK (estado <> 'activo' OR cognito_sub IS NOT NULL)
 );
-COMMENT ON TABLE  usuario IS 'Credencial de acceso. persona_id es nulo en cuentas de servicio.';
-COMMENT ON COLUMN usuario.password_hash IS 'Nulo si la autenticación es delegada (Cognito / SSO).';
+COMMENT ON TABLE  usuario IS 'Cuenta de acceso. Las contraseñas y el MFA los gestiona Cognito: aquí no se guarda ninguna clave. persona_id es nulo en cuentas de servicio.';
+COMMENT ON COLUMN usuario.rut IS 'Nombre de usuario en Cognito.';
+COMMENT ON COLUMN usuario.cognito_sub IS 'Identificador (sub) de la cuenta en Cognito; se completa en el primer ingreso. Une el token con el usuario.';
+COMMENT ON COLUMN usuario.estado IS 'invitado: alta pedida, sin primer ingreso · activo: ya ingresó · bloqueado: acceso suspendido (nunca se borra).';
+COMMENT ON COLUMN usuario.mfa_habilitado IS 'Copia informativa del estado de MFA en Cognito.';
 
 CREATE TABLE rol (
     id           smallint PRIMARY KEY,
@@ -484,15 +489,22 @@ CREATE TABLE documento (
     tipo                      documento_tipo NOT NULL,
     nombre                    varchar(200) NOT NULL,
     archivo_key               varchar(300) NOT NULL,
+    archivo_version           varchar(200),
+    estado                    documento_estado NOT NULL DEFAULT 'pendiente',
+    sha256                    char(64) CHECK (sha256 ~ '^[0-9a-f]{64}$'),
     mime                      varchar(80),
     tamano_bytes              bigint CHECK (tamano_bytes >= 0),
     fecha_documento           date,
     fecha_carga               timestamptz NOT NULL DEFAULT now(),
     contiene_datos_sensibles  boolean NOT NULL DEFAULT false,
     vigente                   boolean NOT NULL DEFAULT true,
-    cargado_por               bigint REFERENCES usuario(id)
+    cargado_por               bigint REFERENCES usuario(id),
+    CHECK (estado = 'pendiente' OR (sha256 IS NOT NULL AND tamano_bytes IS NOT NULL))
 );
 COMMENT ON TABLE  documento IS 'Acta, certificado u otro archivo del comité. El binario vive en S3; aquí solo su ruta.';
+COMMENT ON COLUMN documento.estado IS 'El navegador sube el archivo directo a S3 con una URL firmada: el registro nace pendiente y pasa a disponible cuando la API confirma el objeto.';
+COMMENT ON COLUMN documento.archivo_version IS 'Versión del objeto en el bucket versionado: fija qué archivo corresponde a este registro.';
+COMMENT ON COLUMN documento.sha256 IS 'Huella del archivo, para verificar su integridad.';
 COMMENT ON COLUMN documento.contiene_datos_sensibles IS 'Datos de salud (investigación de accidentes y enfermedades): acceso reforzado.';
 CREATE INDEX documento_comite_idx ON documento (comite_id);
 

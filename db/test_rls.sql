@@ -291,6 +291,16 @@ SELECT pg_temp.debe_fallar('empresa con código de actividad inexistente',
     $q$UPDATE empresa SET actividad_economica_codigo = '999999' WHERE razon_social = 'Empresa 2'$q$);
 SELECT pg_temp.debe_fallar('código SUSESO con formato inválido',
     $q$INSERT INTO organismo_administrador (id, sigla, nombre, tipo, codigo_suseso) VALUES (9, 'X', 'Prueba', 'otro', '31A1')$q$);
+SELECT pg_temp.debe_fallar('usuario activo sin cuenta de Cognito',
+    $q$UPDATE usuario SET estado = 'activo' WHERE rut = '15151515-0'$q$);
+SELECT pg_temp.debe_fallar('documento disponible sin huella ni tamaño',
+    $q$UPDATE documento SET estado = 'disponible' WHERE nombre = 'Investigación C1'$q$);
+SELECT pg_temp.debe_fallar('huella SHA-256 mal formada',
+    $q$UPDATE documento SET sha256 = 'abc' WHERE nombre = 'Investigación C1'$q$);
+UPDATE documento SET estado = 'disponible', tamano_bytes = 1024, sha256 = repeat('a', 64)
+WHERE nombre = 'Investigación C1';
+SELECT pg_temp.verificar('documento disponible con huella y tamaño',
+    (SELECT count(*) FROM documento WHERE nombre = 'Investigación C1' AND estado = 'disponible'), 1);
 SELECT pg_temp.debe_fallar('transferencia internacional sin salvaguarda',
     $q$INSERT INTO encargado_tratamiento (nombre, tipo, pais, transferencia_internacional)
        VALUES ('Nube', 'nube', 'Brasil', true)$q$);
