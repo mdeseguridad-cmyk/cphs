@@ -20,7 +20,7 @@ salida() { terraform -chdir="$INFRA" output -raw "$1"; }
 CLUSTER=$(salida ecs_cluster)
 TAREA=$(salida carga_tarea)
 BUCKET=$(salida bucket_operaciones)
-SG=$(salida grupo_seguridad_api)
+SG=$(salida grupo_seguridad_carga)
 SUBREDES=$(terraform -chdir="$INFRA" output -json subredes_publicas | tr -d '[]" ')
 DB=$(salida db_direccion | cut -d. -f1)
 

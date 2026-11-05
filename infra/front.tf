@@ -1,5 +1,6 @@
 # CloudFront: único punto de entrada, con HTTPS.
-#   /api/*  → balanceador de la API (sin caché)
+#   /api/*  → función Lambda de la API, por su URL firmada (sin caché).
+#             Solo existe cuando hay imagen de la API (var.api_imagen).
 #   resto   → SPA en S3 (con caché); las rutas sin extensión devuelven
 #             index.html para que funcione la navegación de la SPA.
 
@@ -24,6 +25,18 @@ resource "aws_cloudfront_function" "spa" {
       return req;
     }
   JS
+}
+
+# CloudFront firma cada solicitud a la función (SigV4). Por eso:
+#   - pisa el encabezado Authorization: el front envía el token de Cognito en
+#     X-Token-Usuario;
+#   - en POST/PUT/PATCH el front debe enviar el SHA-256 del cuerpo en
+#     x-amz-content-sha256.
+resource "aws_cloudfront_origin_access_control" "api" {
+  name                              = "${local.nombre}-api"
+  origin_access_control_origin_type = "lambda"
+  signing_behavior                  = "always"
+  signing_protocol                  = "sigv4"
 }
 
 data "aws_cloudfront_cache_policy" "optimizada" {
@@ -82,18 +95,19 @@ resource "aws_cloudfront_distribution" "principal" {
     origin_access_control_id = aws_cloudfront_origin_access_control.front.id
   }
 
-  origin {
-    origin_id   = "api"
-    domain_name = local.origen_https ? var.dominio_origen : aws_lb.api.dns_name
-    custom_header {
-      name  = "X-Origen-Verificado"
-      value = random_password.encabezado_origen.result
-    }
-    custom_origin_config {
-      http_port              = 80
-      https_port             = 443
-      origin_protocol_policy = local.origen_https ? "https-only" : "http-only"
-      origin_ssl_protocols   = ["TLSv1.2"]
+  dynamic "origin" {
+    for_each = aws_lambda_function_url.api
+    content {
+      origin_id                = "api"
+      domain_name              = split("/", origin.value.function_url)[2]
+      origin_access_control_id = aws_cloudfront_origin_access_control.api.id
+      custom_origin_config {
+        http_port              = 80
+        https_port             = 443
+        origin_protocol_policy = "https-only"
+        origin_ssl_protocols   = ["TLSv1.2"]
+        origin_read_timeout    = 30
+      }
     }
   }
 
@@ -111,16 +125,19 @@ resource "aws_cloudfront_distribution" "principal" {
     }
   }
 
-  ordered_cache_behavior {
-    path_pattern               = "/api/*"
-    target_origin_id           = "api"
-    viewer_protocol_policy     = "https-only"
-    allowed_methods            = ["GET", "HEAD", "OPTIONS", "PUT", "POST", "PATCH", "DELETE"]
-    cached_methods             = ["GET", "HEAD"]
-    compress                   = true
-    cache_policy_id            = data.aws_cloudfront_cache_policy.sin_cache.id
-    origin_request_policy_id   = data.aws_cloudfront_origin_request_policy.todo_menos_host.id
-    response_headers_policy_id = aws_cloudfront_response_headers_policy.seguridad.id
+  dynamic "ordered_cache_behavior" {
+    for_each = aws_lambda_function_url.api
+    content {
+      path_pattern               = "/api/*"
+      target_origin_id           = "api"
+      viewer_protocol_policy     = "https-only"
+      allowed_methods            = ["GET", "HEAD", "OPTIONS", "PUT", "POST", "PATCH", "DELETE"]
+      cached_methods             = ["GET", "HEAD"]
+      compress                   = true
+      cache_policy_id            = data.aws_cloudfront_cache_policy.sin_cache.id
+      origin_request_policy_id   = data.aws_cloudfront_origin_request_policy.todo_menos_host.id
+      response_headers_policy_id = aws_cloudfront_response_headers_policy.seguridad.id
+    }
   }
 
   restrictions {
@@ -140,10 +157,6 @@ resource "aws_cloudfront_distribution" "principal" {
     precondition {
       condition     = var.dominio == "" || var.certificado_cloudfront_arn != ""
       error_message = "Si define dominio, debe indicar certificado_cloudfront_arn (certificado de ACM en us-east-1)."
-    }
-    precondition {
-      condition     = (var.dominio_origen == "") == (var.certificado_alb_arn == "")
-      error_message = "dominio_origen y certificado_alb_arn van juntos: defina ambos o ninguno."
     }
   }
 }

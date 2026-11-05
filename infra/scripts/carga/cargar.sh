@@ -4,7 +4,10 @@
 #
 # Variables (las entrega la definición de la tarea):
 #   PGHOST PGPORT PGDATABASE PGUSER PGPASSWORD PGSSLMODE  usuario maestro
-#   APP_DB_PASSWORD                                        clave de paritario_app
+#   APP_DB_USUARIO                                         rol de la aplicación
+#
+# El rol de la aplicación no tiene clave: en RDS se le otorga rds_iam y la
+# API se conecta con tokens de IAM.
 #
 # Es idempotente: si el esquema ya existe no lo vuelve a crear; el rol de la
 # aplicación y sus permisos se actualizan siempre.
@@ -13,7 +16,7 @@ set -eu
 DIR=$(cd "$(dirname "$0")" && pwd)
 PSQL="psql -X -v ON_ERROR_STOP=1 -q"
 
-: "${APP_DB_PASSWORD:?falta APP_DB_PASSWORD}"
+APP=${APP_DB_USUARIO:-paritario_app}
 
 existe=$($PSQL -tAc "SELECT count(*) FROM pg_namespace WHERE nspname = 'paritario'")
 if [ "$existe" = "0" ]; then
@@ -30,22 +33,24 @@ else
     echo "El esquema paritario ya existe: no se recrea."
 fi
 
-echo "Configurando el rol paritario_app…"
-$PSQL -v clave="$APP_DB_PASSWORD" <<'SQL'
-SELECT format('CREATE ROLE paritario_app LOGIN PASSWORD %L', :'clave')
-WHERE NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'paritario_app')
+echo "Configurando el rol $APP…"
+$PSQL -v app="$APP" <<'SQL'
+SELECT format('CREATE ROLE %I LOGIN', :'app')
+WHERE NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = :'app')
 \gexec
-SELECT format('ALTER ROLE paritario_app WITH LOGIN NOSUPERUSER NOBYPASSRLS PASSWORD %L', :'clave')
+SELECT format('ALTER ROLE %I WITH LOGIN NOSUPERUSER NOBYPASSRLS PASSWORD NULL', :'app')
 \gexec
-ALTER ROLE paritario_app SET search_path = paritario, public;
-GRANT CONNECT ON DATABASE :"DBNAME" TO paritario_app;
-GRANT USAGE ON SCHEMA paritario TO paritario_app;
-GRANT SELECT, INSERT, UPDATE ON ALL TABLES IN SCHEMA paritario TO paritario_app;
-GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA paritario TO paritario_app;
-ALTER DEFAULT PRIVILEGES IN SCHEMA paritario
-    GRANT SELECT, INSERT, UPDATE ON TABLES TO paritario_app;
-ALTER DEFAULT PRIVILEGES IN SCHEMA paritario
-    GRANT USAGE, SELECT ON SEQUENCES TO paritario_app;
+-- rds_iam solo existe en RDS: habilita el ingreso con token de IAM.
+SELECT format('GRANT rds_iam TO %I', :'app')
+WHERE EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'rds_iam')
+\gexec
+SELECT format('ALTER ROLE %I SET search_path = paritario, public', :'app') \gexec
+SELECT format('GRANT CONNECT ON DATABASE %I TO %I', current_database(), :'app') \gexec
+SELECT format('GRANT USAGE ON SCHEMA paritario TO %I', :'app') \gexec
+SELECT format('GRANT SELECT, INSERT, UPDATE ON ALL TABLES IN SCHEMA paritario TO %I', :'app') \gexec
+SELECT format('GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA paritario TO %I', :'app') \gexec
+SELECT format('ALTER DEFAULT PRIVILEGES IN SCHEMA paritario GRANT SELECT, INSERT, UPDATE ON TABLES TO %I', :'app') \gexec
+SELECT format('ALTER DEFAULT PRIVILEGES IN SCHEMA paritario GRANT USAGE, SELECT ON SEQUENCES TO %I', :'app') \gexec
 SQL
 
 echo "Resumen:"

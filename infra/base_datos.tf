@@ -62,26 +62,6 @@ resource "aws_db_instance" "principal" {
 
 # Credenciales del usuario de la aplicación. scripts/cargar_base.sh crea el
 # rol en PostgreSQL con esta clave.
-resource "random_password" "db_app" {
-  length  = 32
-  special = false
-}
 
-resource "aws_secretsmanager_secret" "db_app" {
-  #checkov:skip=CKV2_AWS_57:Rotación recomendada para producción (requiere una función Lambda de rotación)
-  #checkov:skip=CKV_AWS_149:Cifrado con la llave administrada por AWS; llave propia recomendada para producción
-  name                    = "${local.nombre}/db-app"
-  description             = "Usuario de la aplicación en PostgreSQL (sujeto a seguridad por fila)"
-  recovery_window_in_days = 7
-}
-
-resource "aws_secretsmanager_secret_version" "db_app" {
-  secret_id = aws_secretsmanager_secret.db_app.id
-  secret_string = jsonencode({
-    username = "paritario_app"
-    password = random_password.db_app.result
-    host     = aws_db_instance.principal.address
-    port     = aws_db_instance.principal.port
-    dbname   = aws_db_instance.principal.db_name
-  })
-}
+# La API se conecta como paritario_app con un token de IAM (rds-db:connect),
+# generado localmente por el SDK: no hay clave de aplicación que guardar.

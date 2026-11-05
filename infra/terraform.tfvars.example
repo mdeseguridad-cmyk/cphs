@@ -8,17 +8,17 @@ correo_alertas = "alertas@ejemplo.cl"
 # Presupuesto mensual (USD). Se avisa al 33 %, al 100 % y si el pronóstico lo supera.
 presupuesto_mensual_usd = 150
 
-# Mientras no exista la imagen de la API, déjelo vacío: el servicio se crea con 0 tareas.
+# Mientras no exista la imagen de la API, déjelo vacío: las funciones Lambda no se crean.
 api_imagen = ""
 
 # siempre | dias_habiles | fines_de_semana
 horario = "siempre"
+
+# Con cuota de Lambda ampliada, limite las ejecuciones simultáneas de la API.
+# api_concurrencia = 20
 
 # Opcionales
 # dominio                    = "app.paritario.cl"
 # certificado_cloudfront_arn = "arn:aws:acm:us-east-1:123456789012:certificate/..."
 # dominio_correo             = "paritario.cl"
 
-# Antes de cargar datos reales: cifrar el tramo CloudFront→balanceador.
-# dominio_origen      = "origen.app.paritario.cl"
-# certificado_alb_arn = "arn:aws:acm:sa-east-1:123456789012:certificate/..."

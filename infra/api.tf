@@ -1,13 +1,34 @@
-# API en contenedores (ECS Fargate) detrás de un balanceador al que solo
-# CloudFront puede llegar. Mientras no exista la imagen de la aplicación
-# (var.api_imagen vacía), el servicio queda creado con 0 tareas.
+# API en AWS Lambda, con la misma imagen de contenedor que correría en
+# cualquier otro lado: Lambda Web Adapter traduce las invocaciones a HTTP.
+#
+#   api        en la VPC (subredes privadas). CloudFront la llama por su URL
+#              de función, firmada (OAC); nadie más puede invocarla. Llega a
+#              la base y a S3, y a nada más.
+#   trabajos   fuera de la VPC. Hace lo que necesita internet: enviar
+#              correos (SES) y administrar usuarios (Cognito). La API le
+#              deja trabajos en s3://operaciones/trabajos/ y S3 la invoca.
+#
+# Mientras no exista la imagen de la aplicación (var.api_imagen vacía), las
+# funciones no se crean y CloudFront solo sirve el front.
 
 locals {
-  api_imagen   = var.api_imagen != "" ? var.api_imagen : "${aws_ecr_repository.api.repository_url}:latest"
-  api_tareas   = var.api_imagen != "" ? var.api_tareas : 0
-  db_admin_arn = aws_db_instance.principal.master_user_secret[0].secret_arn
-  origen_https = var.certificado_alb_arn != ""
-  listener_arn = local.origen_https ? aws_lb_listener.https[0].arn : aws_lb_listener.http[0].arn
+  con_api          = var.api_imagen != ""
+  prefijo_trabajos = "trabajos/"
+  db_usuario_app   = "paritario_app"
+  cognito_emisor   = "https://cognito-idp.${var.region}.amazonaws.com/${aws_cognito_user_pool.principal.id}"
+  correo_remitente = var.dominio_correo != "" ? "notificaciones@${var.dominio_correo}" : ""
+
+  entorno_comun = {
+    AWS_LWA_PORT                 = tostring(var.api_puerto)
+    AWS_LWA_READINESS_CHECK_PATH = var.api_ruta_salud
+    DOCUMENTOS_BUCKET            = aws_s3_bucket.b["documentos"].bucket
+    OPERACIONES_BUCKET           = aws_s3_bucket.b["operaciones"].bucket
+    TRABAJOS_PREFIJO             = local.prefijo_trabajos
+    COGNITO_USER_POOL_ID         = aws_cognito_user_pool.principal.id
+    COGNITO_CLIENT_ID            = aws_cognito_user_pool_client.spa.id
+    COGNITO_EMISOR               = local.cognito_emisor
+    CORREO_REMITENTE             = local.correo_remitente
+  }
 }
 
 resource "aws_ecr_repository" "api" {
@@ -31,73 +52,68 @@ resource "aws_ecr_lifecycle_policy" "api" {
   })
 }
 
-resource "aws_ecs_cluster" "principal" {
-  #checkov:skip=CKV_AWS_65:Container Insights recomendado para producción; agrega costo
-  name = local.nombre
-  setting {
-    name  = "containerInsights"
-    value = "disabled" # se activa en producción; en el piloto agrega costo
-  }
-}
-
-resource "aws_cloudwatch_log_group" "api" {
-  #checkov:skip=CKV_AWS_338:30 días por minimización de datos personales (Ley 21.719)
-  #checkov:skip=CKV_AWS_158:Cifrado por defecto de CloudWatch; llave propia recomendada para producción
-  name              = "/ecs/${local.nombre}/api"
-  retention_in_days = 30
-}
-
-resource "aws_cloudwatch_log_group" "carga" {
-  #checkov:skip=CKV_AWS_338:30 días: registros de una tarea de operación
-  #checkov:skip=CKV_AWS_158:Cifrado por defecto de CloudWatch
-  name              = "/ecs/${local.nombre}/carga-base"
-  retention_in_days = 30
-}
-
-# --- Roles ---------------------------------------------------------------
-
-data "aws_iam_policy_document" "asumir_ecs" {
+# Lambda baja la imagen con estos permisos, solo para funciones de esta cuenta.
+data "aws_iam_policy_document" "ecr_lambda" {
   statement {
-    actions = ["sts:AssumeRole"]
+    sid = "LambdaBajaLaImagen"
     principals {
       type        = "Service"
-      identifiers = ["ecs-tasks.amazonaws.com"]
+      identifiers = ["lambda.amazonaws.com"]
+    }
+    actions = ["ecr:BatchGetImage", "ecr:GetDownloadUrlForLayer"]
+    condition {
+      test     = "StringLike"
+      variable = "aws:sourceArn"
+      values   = ["arn:aws:lambda:${var.region}:${data.aws_caller_identity.actual.account_id}:function:${local.nombre}-*"]
     }
   }
 }
 
-# Rol de ejecución: lo usa ECS para bajar la imagen, escribir logs y leer
-# los secretos que se inyectan como variables de entorno.
-resource "aws_iam_role" "ejecucion" {
-  name               = "${local.nombre}-ecs-ejecucion"
-  assume_role_policy = data.aws_iam_policy_document.asumir_ecs.json
+resource "aws_ecr_repository_policy" "api" {
+  repository = aws_ecr_repository.api.name
+  policy     = data.aws_iam_policy_document.ecr_lambda.json
 }
 
-resource "aws_iam_role_policy_attachment" "ejecucion" {
-  role       = aws_iam_role.ejecucion.name
-  policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
+# --- Registros (30 días, por minimización de datos) ------------------------
+
+resource "aws_cloudwatch_log_group" "funcion" {
+  #checkov:skip=CKV_AWS_338:30 días por minimización de datos personales (Ley 21.719)
+  #checkov:skip=CKV_AWS_158:Cifrado por defecto de CloudWatch; llave propia recomendada para producción
+  for_each          = toset(["api", "trabajos"])
+  name              = "/aws/lambda/${local.nombre}-${each.key}"
+  retention_in_days = 30
 }
 
-data "aws_iam_policy_document" "ejecucion_secretos" {
+# --- Roles -----------------------------------------------------------------
+
+data "aws_iam_policy_document" "asumir_lambda" {
   statement {
-    actions   = ["secretsmanager:GetSecretValue"]
-    resources = [aws_secretsmanager_secret.db_app.arn, local.db_admin_arn]
+    actions = ["sts:AssumeRole"]
+    principals {
+      type        = "Service"
+      identifiers = ["lambda.amazonaws.com"]
+    }
   }
 }
 
-resource "aws_iam_role_policy" "ejecucion_secretos" {
-  name   = "leer-secretos"
-  role   = aws_iam_role.ejecucion.id
-  policy = data.aws_iam_policy_document.ejecucion_secretos.json
-}
-
-# Rol de la API: documentos en S3 y envío de correos. Nada más.
+# API: conectarse a la base como paritario_app, leer y escribir documentos y
+# dejar trabajos. No puede enviar correos ni tocar usuarios de Cognito.
 resource "aws_iam_role" "api" {
   name               = "${local.nombre}-api"
-  assume_role_policy = data.aws_iam_policy_document.asumir_ecs.json
+  assume_role_policy = data.aws_iam_policy_document.asumir_lambda.json
+}
+
+resource "aws_iam_role_policy_attachment" "api_vpc" {
+  role       = aws_iam_role.api.name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole"
 }
 
 data "aws_iam_policy_document" "api" {
+  statement {
+    sid       = "BaseDeDatos"
+    actions   = ["rds-db:connect"]
+    resources = ["arn:aws:rds-db:${var.region}:${data.aws_caller_identity.actual.account_id}:dbuser:${aws_db_instance.principal.resource_id}/${local.db_usuario_app}"]
+  }
   statement {
     sid       = "Documentos"
     actions   = ["s3:GetObject", "s3:PutObject", "s3:DeleteObject"]
@@ -109,14 +125,9 @@ data "aws_iam_policy_document" "api" {
     resources = [aws_s3_bucket.b["documentos"].arn]
   }
   statement {
-    sid       = "Correo"
-    actions   = ["ses:SendEmail", "ses:SendRawEmail"]
-    resources = ["*"]
-    condition {
-      test     = "StringLike"
-      variable = "ses:FromAddress"
-      values   = [var.dominio_correo != "" ? "*@${var.dominio_correo}" : "*"]
-    }
+    sid       = "DejarTrabajos"
+    actions   = ["s3:PutObject"]
+    resources = ["${aws_s3_bucket.b["operaciones"].arn}/${local.prefijo_trabajos}*"]
   }
 }
 
@@ -126,215 +137,169 @@ resource "aws_iam_role_policy" "api" {
   policy = data.aws_iam_policy_document.api.json
 }
 
-# --- Tarea y servicio de la API -------------------------------------------
+# Trabajos: leer y borrar trabajos, adjuntar documentos, enviar correos y
+# administrar usuarios del user pool. No llega a la base de datos.
+resource "aws_iam_role" "trabajos" {
+  name               = "${local.nombre}-trabajos"
+  assume_role_policy = data.aws_iam_policy_document.asumir_lambda.json
+}
 
-resource "aws_ecs_task_definition" "api" {
-  family                   = "${local.nombre}-api"
-  requires_compatibilities = ["FARGATE"]
-  network_mode             = "awsvpc"
-  cpu                      = var.api_cpu
-  memory                   = var.api_memoria
-  execution_role_arn       = aws_iam_role.ejecucion.arn
-  task_role_arn            = aws_iam_role.api.arn
-  runtime_platform {
-    operating_system_family = "LINUX"
-    cpu_architecture        = "ARM64" # Graviton: ~20 % más barato
+resource "aws_iam_role_policy_attachment" "trabajos_basica" {
+  role       = aws_iam_role.trabajos.name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+}
+
+data "aws_iam_policy_document" "trabajos" {
+  statement {
+    sid       = "LeerTrabajos"
+    actions   = ["s3:GetObject", "s3:DeleteObject"]
+    resources = ["${aws_s3_bucket.b["operaciones"].arn}/${local.prefijo_trabajos}*"]
   }
-
-  container_definitions = jsonencode([{
-    name                   = "api"
-    image                  = local.api_imagen
-    essential              = true
-    readonlyRootFilesystem = true
-    portMappings           = [{ containerPort = var.api_puerto, protocol = "tcp" }]
-    environment = [
-      { name = "PUERTO", value = tostring(var.api_puerto) },
-      { name = "AWS_REGION", value = var.region },
-      { name = "DB_HOST", value = aws_db_instance.principal.address },
-      { name = "DB_PORT", value = tostring(aws_db_instance.principal.port) },
-      { name = "DB_NAME", value = aws_db_instance.principal.db_name },
-      { name = "DB_USER", value = "paritario_app" },
-      { name = "DB_SSLMODE", value = "require" },
-      { name = "DOCUMENTOS_BUCKET", value = aws_s3_bucket.b["documentos"].bucket },
-      { name = "COGNITO_USER_POOL_ID", value = aws_cognito_user_pool.principal.id },
-      { name = "COGNITO_CLIENT_ID", value = aws_cognito_user_pool_client.spa.id },
-      { name = "CORREO_REMITENTE", value = var.dominio_correo != "" ? "notificaciones@${var.dominio_correo}" : "" },
+  statement {
+    sid       = "AdjuntarDocumentos"
+    actions   = ["s3:GetObject"]
+    resources = ["${aws_s3_bucket.b["documentos"].arn}/*"]
+  }
+  statement {
+    sid       = "Correo"
+    actions   = ["ses:SendEmail", "ses:SendRawEmail"]
+    resources = ["*"]
+    condition {
+      test     = "StringLike"
+      variable = "ses:FromAddress"
+      values   = [var.dominio_correo != "" ? "*@${var.dominio_correo}" : "*"]
+    }
+  }
+  statement {
+    sid = "Usuarios"
+    actions = [
+      "cognito-idp:AdminCreateUser",
+      "cognito-idp:AdminGetUser",
+      "cognito-idp:AdminUpdateUserAttributes",
+      "cognito-idp:AdminDisableUser",
+      "cognito-idp:AdminEnableUser",
+      "cognito-idp:AdminResetUserPassword",
+      "cognito-idp:AdminUserGlobalSignOut",
     ]
-    secrets = [
-      { name = "DB_PASSWORD", valueFrom = "${aws_secretsmanager_secret.db_app.arn}:password::" },
-    ]
-    logConfiguration = {
-      logDriver = "awslogs"
-      options = {
-        awslogs-group         = aws_cloudwatch_log_group.api.name
-        awslogs-region        = var.region
-        awslogs-stream-prefix = "api"
-      }
-    }
-  }])
-}
-
-resource "aws_ecs_service" "api" {
-  #checkov:skip=CKV_AWS_333:Piloto sin NAT Gateway (ahorra ~35 USD/mes); el grupo de seguridad solo admite tráfico del balanceador
-  name            = "api"
-  cluster         = aws_ecs_cluster.principal.id
-  task_definition = aws_ecs_task_definition.api.arn
-  desired_count   = local.api_tareas
-  launch_type     = "FARGATE"
-
-  network_configuration {
-    subnets          = aws_subnet.publica[*].id
-    security_groups  = [aws_security_group.api.id]
-    assign_public_ip = true # sin NAT Gateway; el grupo de seguridad solo admite al balanceador
-  }
-
-  load_balancer {
-    target_group_arn = aws_lb_target_group.api.arn
-    container_name   = "api"
-    container_port   = var.api_puerto
-  }
-
-  deployment_circuit_breaker {
-    enable   = true
-    rollback = true
-  }
-
-  health_check_grace_period_seconds = 60
-
-  # Con horario de encendido (horario.tf), un apply fuera de horario deja la
-  # API encendida hasta el siguiente apagado programado.
-
-  depends_on = [aws_lb_listener.http, aws_lb_listener.https]
-}
-
-# --- Tarea de carga inicial de la base (scripts/cargar_base.sh) -----------
-
-resource "aws_ecs_task_definition" "carga" {
-  family                   = "${local.nombre}-carga-base"
-  requires_compatibilities = ["FARGATE"]
-  network_mode             = "awsvpc"
-  cpu                      = 256
-  memory                   = 512
-  execution_role_arn       = aws_iam_role.ejecucion.arn
-  runtime_platform {
-    operating_system_family = "LINUX"
-    cpu_architecture        = "ARM64"
-  }
-
-  container_definitions = jsonencode([{
-    name      = "carga"
-    image     = "public.ecr.aws/docker/library/postgres:16-alpine"
-    essential = true
-    command   = ["sh", "-c", "wget -qO- \"$URL_CARGA\" | tar xz -C /tmp && sh /tmp/carga/cargar.sh"]
-    environment = [
-      { name = "PGHOST", value = aws_db_instance.principal.address },
-      { name = "PGPORT", value = tostring(aws_db_instance.principal.port) },
-      { name = "PGDATABASE", value = aws_db_instance.principal.db_name },
-      { name = "PGUSER", value = aws_db_instance.principal.username },
-      { name = "PGSSLMODE", value = "require" },
-    ]
-    secrets = [
-      { name = "PGPASSWORD", valueFrom = "${local.db_admin_arn}:password::" },
-      { name = "APP_DB_PASSWORD", valueFrom = "${aws_secretsmanager_secret.db_app.arn}:password::" },
-    ]
-    logConfiguration = {
-      logDriver = "awslogs"
-      options = {
-        awslogs-group         = aws_cloudwatch_log_group.carga.name
-        awslogs-region        = var.region
-        awslogs-stream-prefix = "carga"
-      }
-    }
-  }])
-}
-
-# --- Balanceador -----------------------------------------------------------
-
-# CloudFront agrega este encabezado; sin él, el balanceador responde 403.
-resource "random_password" "encabezado_origen" {
-  length  = 40
-  special = false
-}
-
-resource "aws_lb" "api" {
-  #checkov:skip=CKV2_AWS_28:Público solo para la lista de prefijos de CloudFront; WAF recomendado para producción en CloudFront
-  #checkov:skip=CKV_AWS_91:Registros de acceso recomendados para producción
-  #checkov:skip=CKV2_AWS_20:El listener HTTP solo existe sin certificado de origen (datos de prueba)
-  name                       = local.nombre
-  load_balancer_type         = "application"
-  internal                   = false
-  security_groups            = [aws_security_group.alb.id]
-  subnets                    = aws_subnet.publica[*].id
-  drop_invalid_header_fields = true
-  enable_deletion_protection = true
-}
-
-resource "aws_lb_target_group" "api" {
-  #checkov:skip=CKV_AWS_378:Balanceador→tareas dentro de la VPC, entre grupos de seguridad que solo se admiten entre sí
-  name                 = "${local.nombre}-api"
-  port                 = var.api_puerto
-  protocol             = "HTTP"
-  target_type          = "ip"
-  vpc_id               = aws_vpc.principal.id
-  deregistration_delay = 30
-  health_check {
-    path                = var.api_ruta_salud
-    matcher             = "200"
-    interval            = 30
-    healthy_threshold   = 2
-    unhealthy_threshold = 3
+    resources = [aws_cognito_user_pool.principal.arn]
   }
 }
 
-# Sin dominio_origen, CloudFront llega al balanceador por HTTP: el tramo no va
-# cifrado. Aceptable solo con datos de prueba; antes de cargar datos reales,
-# defina dominio_origen y certificado_alb_arn (ver README.md).
-resource "aws_lb_listener" "http" {
-  #checkov:skip=CKV_AWS_2:Solo existe sin certificado de origen; con datos reales se usa el listener HTTPS
-  #checkov:skip=CKV2_AWS_20:Solo existe sin certificado de origen; con datos reales se usa el listener HTTPS
-  #checkov:skip=CKV_AWS_103:Solo existe sin certificado de origen; con datos reales se usa el listener HTTPS
-  count             = local.origen_https ? 0 : 1
-  load_balancer_arn = aws_lb.api.arn
-  port              = 80
-  protocol          = "HTTP"
-  default_action {
-    type = "fixed-response"
-    fixed_response {
-      content_type = "text/plain"
-      message_body = "Acceso denegado"
-      status_code  = "403"
-    }
-  }
+resource "aws_iam_role_policy" "trabajos" {
+  name   = "trabajos"
+  role   = aws_iam_role.trabajos.id
+  policy = data.aws_iam_policy_document.trabajos.json
 }
 
-resource "aws_lb_listener" "https" {
-  count             = local.origen_https ? 1 : 0
-  load_balancer_arn = aws_lb.api.arn
-  port              = 443
-  protocol          = "HTTPS"
-  ssl_policy        = "ELBSecurityPolicy-TLS13-1-2-2021-06"
-  certificate_arn   = var.certificado_alb_arn
-  default_action {
-    type = "fixed-response"
-    fixed_response {
-      content_type = "text/plain"
-      message_body = "Acceso denegado"
-      status_code  = "403"
-    }
+# --- Funciones ---------------------------------------------------------------
+
+resource "aws_lambda_function" "api" {
+  #checkov:skip=CKV_AWS_116:Las solicitudes HTTP se responden en línea; no hay invocaciones asíncronas que reintentar
+  #checkov:skip=CKV_AWS_173:Las variables no contienen secretos (la base usa tokens de IAM); cifradas con la llave de AWS
+  #checkov:skip=CKV_AWS_272:Firma de código recomendada para producción
+  #checkov:skip=CKV_AWS_50:X-Ray necesita salida a internet o un endpoint de pago desde la VPC
+  #checkov:skip=CKV_AWS_115:Concurrencia configurable (var.api_concurrencia); las cuentas nuevas parten con un máximo de 10
+  count         = local.con_api ? 1 : 0
+  function_name = "${local.nombre}-api"
+  role          = aws_iam_role.api.arn
+  package_type  = "Image"
+  image_uri     = var.api_imagen
+  architectures = ["arm64"] # Graviton: ~20 % más barato
+  memory_size   = var.api_memoria
+  timeout       = var.api_tiempo_max
+
+  reserved_concurrent_executions = var.api_concurrencia
+
+  vpc_config {
+    subnet_ids         = aws_subnet.privada[*].id
+    security_group_ids = [aws_security_group.api.id]
   }
+
+  environment {
+    variables = merge(local.entorno_comun, {
+      DB_HOST    = aws_db_instance.principal.address
+      DB_PORT    = tostring(aws_db_instance.principal.port)
+      DB_NAME    = aws_db_instance.principal.db_name
+      DB_USER    = local.db_usuario_app
+      DB_AUTH    = "iam"
+      DB_SSLMODE = "verify-full"
+    })
+  }
+
+  depends_on = [aws_cloudwatch_log_group.funcion, aws_ecr_repository_policy.api, aws_iam_role_policy_attachment.api_vpc]
 }
 
-resource "aws_lb_listener_rule" "desde_cloudfront" {
-  listener_arn = local.listener_arn
-  priority     = 10
-  action {
-    type             = "forward"
-    target_group_arn = aws_lb_target_group.api.arn
+resource "aws_lambda_function_url" "api" {
+  count              = local.con_api ? 1 : 0
+  function_name      = aws_lambda_function.api[0].function_name
+  authorization_type = "AWS_IAM" # solo CloudFront, que firma cada solicitud
+  invoke_mode        = "BUFFERED"
+}
+
+resource "aws_lambda_permission" "cloudfront_url" {
+  count                  = local.con_api ? 1 : 0
+  statement_id           = "CloudFrontUrl"
+  action                 = "lambda:InvokeFunctionUrl"
+  function_name          = aws_lambda_function.api[0].function_name
+  principal              = "cloudfront.amazonaws.com"
+  source_arn             = aws_cloudfront_distribution.principal.arn
+  function_url_auth_type = "AWS_IAM"
+}
+
+resource "aws_lambda_permission" "cloudfront_invocar" {
+  count         = local.con_api ? 1 : 0
+  statement_id  = "CloudFrontInvocar"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.api[0].function_name
+  principal     = "cloudfront.amazonaws.com"
+  source_arn    = aws_cloudfront_distribution.principal.arn
+}
+
+resource "aws_lambda_function" "trabajos" {
+  #checkov:skip=CKV_AWS_117:Fuera de la VPC a propósito: necesita SES y Cognito sin NAT Gateway, y no llega a la base
+  #checkov:skip=CKV_AWS_116:S3 la invoca de forma asíncrona; los trabajos fallidos quedan en el bucket hasta que vencen (7 días)
+  #checkov:skip=CKV_AWS_173:Las variables no contienen secretos; cifradas con la llave de AWS
+  #checkov:skip=CKV_AWS_272:Firma de código recomendada para producción
+  #checkov:skip=CKV_AWS_50:Trazas de X-Ray recomendadas para producción
+  count         = local.con_api ? 1 : 0
+  function_name = "${local.nombre}-trabajos"
+  role          = aws_iam_role.trabajos.arn
+  package_type  = "Image"
+  image_uri     = var.api_imagen
+  architectures = ["arm64"]
+  memory_size   = 512
+  timeout       = 60
+
+  reserved_concurrent_executions = var.api_concurrencia == -1 ? -1 : 2
+
+  environment {
+    variables = merge(local.entorno_comun, {
+      # Lambda Web Adapter entrega los eventos de S3 como POST a esta ruta.
+      AWS_LWA_PASS_THROUGH_PATH = "/interno/trabajos"
+      MODO                      = "trabajos"
+    })
   }
-  condition {
-    http_header {
-      http_header_name = "X-Origen-Verificado"
-      values           = [random_password.encabezado_origen.result]
-    }
+
+  depends_on = [aws_cloudwatch_log_group.funcion, aws_ecr_repository_policy.api, aws_iam_role_policy_attachment.trabajos_basica]
+}
+
+resource "aws_lambda_permission" "s3_trabajos" {
+  count          = local.con_api ? 1 : 0
+  statement_id   = "S3Trabajos"
+  action         = "lambda:InvokeFunction"
+  function_name  = aws_lambda_function.trabajos[0].function_name
+  principal      = "s3.amazonaws.com"
+  source_arn     = aws_s3_bucket.b["operaciones"].arn
+  source_account = data.aws_caller_identity.actual.account_id
+}
+
+resource "aws_s3_bucket_notification" "trabajos" {
+  count  = local.con_api ? 1 : 0
+  bucket = aws_s3_bucket.b["operaciones"].id
+  lambda_function {
+    lambda_function_arn = aws_lambda_function.trabajos[0].arn
+    events              = ["s3:ObjectCreated:*"]
+    filter_prefix       = local.prefijo_trabajos
   }
+  depends_on = [aws_lambda_permission.s3_trabajos]
 }

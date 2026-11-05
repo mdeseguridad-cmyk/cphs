@@ -14,14 +14,12 @@ mock_provider "aws" {
   mock_resource "aws_db_instance" {
     defaults = {
       arn                = "arn:aws:rds:sa-east-1:123456789012:db:paritario-piloto"
+      resource_id        = "db-SIMULADA"
       master_user_secret = [{ secret_arn = "arn:aws:secretsmanager:sa-east-1:123456789012:secret:rds-admin", kms_key_id = "k", secret_status = "active" }]
     }
   }
   mock_resource "aws_s3_bucket" {
     defaults = { arn = "arn:aws:s3:::bucket-simulado" }
-  }
-  mock_resource "aws_secretsmanager_secret" {
-    defaults = { arn = "arn:aws:secretsmanager:sa-east-1:123456789012:secret:app" }
   }
   mock_resource "aws_iam_role" {
     defaults = { arn = "arn:aws:iam::123456789012:role/simulado" }
@@ -29,23 +27,11 @@ mock_provider "aws" {
   mock_resource "aws_ecs_task_definition" {
     defaults = { arn = "arn:aws:ecs:sa-east-1:123456789012:task-definition/simulada:1" }
   }
-  mock_resource "aws_lb_target_group" {
-    defaults = { arn = "arn:aws:elasticloadbalancing:sa-east-1:123456789012:targetgroup/simulado/1" }
-  }
   mock_resource "aws_cloudfront_distribution" {
     defaults = { arn = "arn:aws:cloudfront::123456789012:distribution/SIMULADA" }
   }
-  mock_resource "aws_lb" {
-    defaults = { arn = "arn:aws:elasticloadbalancing:sa-east-1:123456789012:loadbalancer/app/simulado/1", dns_name = "simulado.sa-east-1.elb.amazonaws.com" }
-  }
-  mock_resource "aws_lb_listener" {
-    defaults = { arn = "arn:aws:elasticloadbalancing:sa-east-1:123456789012:listener/app/simulado/1/1" }
-  }
   mock_resource "aws_ecs_cluster" {
     defaults = { arn = "arn:aws:ecs:sa-east-1:123456789012:cluster/paritario-piloto", id = "arn:aws:ecs:sa-east-1:123456789012:cluster/paritario-piloto" }
-  }
-  mock_resource "aws_ecs_service" {
-    defaults = { id = "arn:aws:ecs:sa-east-1:123456789012:service/paritario-piloto/api" }
   }
   mock_resource "aws_ecr_repository" {
     defaults = { arn = "arn:aws:ecr:sa-east-1:123456789012:repository/paritario-piloto-api", repository_url = "123456789012.dkr.ecr.sa-east-1.amazonaws.com/paritario-piloto-api" }
@@ -59,12 +45,19 @@ mock_provider "aws" {
   mock_resource "aws_cloudwatch_log_group" {
     defaults = { arn = "arn:aws:logs:sa-east-1:123456789012:log-group:simulado" }
   }
+  mock_resource "aws_lambda_function" {
+    defaults = { arn = "arn:aws:lambda:sa-east-1:123456789012:function:simulada" }
+  }
+  mock_resource "aws_lambda_function_url" {
+    defaults = { function_url = "https://abc123simulado.lambda-url.sa-east-1.on.aws/" }
+  }
+  mock_resource "aws_vpc_endpoint" {
+    defaults = { prefix_list_id = "pl-6aa54003" }
+  }
   mock_resource "aws_cloudfront_function" {
     defaults = { arn = "arn:aws:cloudfront::123456789012:function/simulada" }
   }
 }
-
-mock_provider "random" {}
 
 run "piloto_sin_aplicacion" {
   command = apply
@@ -73,8 +66,12 @@ run "piloto_sin_aplicacion" {
   }
 
   assert {
-    condition     = aws_ecs_service.api.desired_count == 0
-    error_message = "Sin imagen de la API, el servicio debe quedar con 0 tareas."
+    condition     = length(aws_lambda_function.api) == 0 && length(aws_lambda_function.trabajos) == 0
+    error_message = "Sin imagen de la API no se crean las funciones."
+  }
+  assert {
+    condition     = length(aws_cloudfront_distribution.principal.origin) == 1 && length(aws_cloudfront_distribution.principal.ordered_cache_behavior) == 0
+    error_message = "Sin API, CloudFront solo debe servir el front."
   }
   assert {
     condition     = length(aws_scheduler_schedule.horario) == 0
@@ -85,8 +82,8 @@ run "piloto_sin_aplicacion" {
     error_message = "La base debe ser privada y cifrada."
   }
   assert {
-    condition     = aws_db_instance.principal.deletion_protection
-    error_message = "La base debe tener protección contra borrado."
+    condition     = aws_db_instance.principal.deletion_protection && aws_db_instance.principal.iam_database_authentication_enabled
+    error_message = "La base debe tener protección contra borrado y autenticación por IAM."
   }
   assert {
     condition     = length(aws_budgets_budget.mensual) == 1
@@ -104,34 +101,74 @@ run "piloto_sin_aplicacion" {
     condition     = length([for s in aws_subnet.privada : s if s.map_public_ip_on_launch]) == 0
     error_message = "Las subredes privadas no deben asignar IP pública."
   }
+  assert {
+    condition     = length([for r in aws_route_table.privada.route : r if r.cidr_block == "0.0.0.0/0"]) == 0
+    error_message = "Las subredes privadas no deben tener ruta a internet."
+  }
+  assert {
+    condition     = aws_vpc_endpoint.s3.vpc_endpoint_type == "Gateway"
+    error_message = "S3 debe alcanzarse por un endpoint gateway (sin costo)."
+  }
 }
 
 run "con_aplicacion_y_dias_habiles" {
   command = apply
   variables {
-    api_imagen = "123456789012.dkr.ecr.sa-east-1.amazonaws.com/paritario-piloto-api:1.0.0"
-    api_tareas = 2
-    horario    = "dias_habiles"
+    api_imagen       = "123456789012.dkr.ecr.sa-east-1.amazonaws.com/paritario-piloto-api:1.0.0"
+    api_concurrencia = 10
+    horario          = "dias_habiles"
   }
 
   assert {
-    condition     = aws_ecs_service.api.desired_count == 2
-    error_message = "Con imagen, el servicio debe tener las tareas pedidas."
+    condition     = aws_lambda_function.api[0].architectures[0] == "arm64" && aws_lambda_function.api[0].image_uri == "123456789012.dkr.ecr.sa-east-1.amazonaws.com/paritario-piloto-api:1.0.0"
+    error_message = "La API debe correr la imagen pedida en ARM64."
   }
   assert {
-    condition     = length(aws_scheduler_schedule.horario) == 4
-    error_message = "El horario de días hábiles debe crear 4 programaciones."
+    condition     = length(aws_lambda_function.api[0].vpc_config) == 1 && length(aws_lambda_function.trabajos[0].vpc_config) == 0
+    error_message = "La API va en la VPC; la función de trabajos, fuera."
+  }
+  assert {
+    condition     = aws_lambda_function.api[0].reserved_concurrent_executions == 10
+    error_message = "La concurrencia reservada debe respetar api_concurrencia."
+  }
+  assert {
+    condition     = aws_lambda_function.api[0].environment[0].variables["DB_USER"] == "paritario_app" && aws_lambda_function.api[0].environment[0].variables["DB_AUTH"] == "iam"
+    error_message = "La API debe conectarse como paritario_app con token de IAM."
+  }
+  assert {
+    condition     = length([for k, v in aws_lambda_function.api[0].environment[0].variables : k if strcontains(lower(k), "password")]) == 0
+    error_message = "La API no debe recibir claves en sus variables."
+  }
+  assert {
+    condition     = !contains(keys(aws_lambda_function.trabajos[0].environment[0].variables), "DB_HOST")
+    error_message = "La función de trabajos no debe conocer la base."
+  }
+  assert {
+    condition     = aws_lambda_function_url.api[0].authorization_type == "AWS_IAM"
+    error_message = "La URL de la función solo debe aceptar solicitudes firmadas."
+  }
+  assert {
+    condition     = one([for o in aws_cloudfront_distribution.principal.origin : o.domain_name if o.origin_id == "api"]) == "abc123simulado.lambda-url.sa-east-1.on.aws"
+    error_message = "CloudFront debe apuntar al dominio de la URL de la función."
+  }
+  assert {
+    condition     = aws_cloudfront_distribution.principal.ordered_cache_behavior[0].path_pattern == "/api/*"
+    error_message = "/api/* debe ir a la función."
+  }
+  assert {
+    condition     = aws_s3_bucket_notification.trabajos[0].lambda_function[0].filter_prefix == "trabajos/"
+    error_message = "Los trabajos se leen desde el prefijo trabajos/."
+  }
+  assert {
+    condition     = length(aws_scheduler_schedule.horario) == 2
+    error_message = "El horario solo enciende y apaga la base."
   }
   assert {
     condition     = aws_scheduler_schedule.horario["db_encender"].schedule_expression == "cron(0 7 ? * MON-FRI *)"
     error_message = "La base debe encenderse a las 07:00 de lunes a viernes."
   }
   assert {
-    condition     = jsondecode(aws_scheduler_schedule.horario["api_encender"].target[0].input).DesiredCount == 2
-    error_message = "El encendido debe restaurar las tareas pedidas."
-  }
-  assert {
-    condition     = aws_scheduler_schedule.horario["api_apagar"].schedule_expression_timezone == "America/Santiago"
+    condition     = aws_scheduler_schedule.horario["db_apagar"].schedule_expression_timezone == "America/Santiago"
     error_message = "El horario debe estar en hora de Chile."
   }
   assert {
@@ -140,19 +177,19 @@ run "con_aplicacion_y_dias_habiles" {
   }
 }
 
-run "fines_de_semana_sin_aplicacion_no_enciende_tareas" {
+run "fines_de_semana" {
   command = apply
   variables {
     horario = "fines_de_semana"
   }
 
   assert {
-    condition     = jsondecode(aws_scheduler_schedule.horario["api_encender"].target[0].input).DesiredCount == 0
-    error_message = "Sin imagen, el encendido programado no debe levantar tareas."
+    condition     = aws_scheduler_schedule.horario["db_apagar"].schedule_expression == "cron(0 23 ? * SUN *)"
+    error_message = "La base debe apagarse el domingo a las 23:00."
   }
   assert {
-    condition     = aws_scheduler_schedule.horario["db_apagar"].schedule_expression == "cron(15 23 ? * SUN *)"
-    error_message = "La base debe apagarse el domingo a las 23:15."
+    condition     = jsondecode(aws_scheduler_schedule.horario["db_encender"].target[0].input).DbInstanceIdentifier == aws_db_instance.principal.identifier
+    error_message = "El encendido debe apuntar a la base del piloto."
   }
 }
 
@@ -178,33 +215,12 @@ run "dominio_propio_con_correo" {
   }
 }
 
-run "origen_cifrado_con_certificado" {
-  command = apply
-  variables {
-    dominio_origen      = "origen.app.paritario.cl"
-    certificado_alb_arn = "arn:aws:acm:sa-east-1:123456789012:certificate/simulado"
-  }
-
-  assert {
-    condition     = length(aws_lb_listener.http) == 0 && length(aws_lb_listener.https) == 1
-    error_message = "Con certificado de origen solo debe existir el listener HTTPS."
-  }
-  assert {
-    condition     = one([for o in aws_cloudfront_distribution.principal.origin : o.custom_origin_config[0].origin_protocol_policy if o.origin_id == "api"]) == "https-only"
-    error_message = "CloudFront debe llegar al balanceador por HTTPS."
-  }
-  assert {
-    condition     = aws_vpc_security_group_ingress_rule.alb_desde_cloudfront.from_port == 443
-    error_message = "El balanceador debe admitir CloudFront en el puerto 443."
-  }
-}
-
-run "origen_sin_certificado_es_rechazado" {
+run "tiempo_maximo_fuera_de_rango_es_rechazado" {
   command = plan
   variables {
-    dominio_origen = "origen.app.paritario.cl"
+    api_tiempo_max = 60
   }
-  expect_failures = [aws_cloudfront_distribution.principal]
+  expect_failures = [var.api_tiempo_max]
 }
 
 run "dominio_sin_certificado_es_rechazado" {

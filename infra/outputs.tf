@@ -35,13 +35,8 @@ output "db_direccion" {
 }
 
 output "db_secreto_admin_arn" {
-  description = "Secreto con la clave del administrador de la base (lo gestiona RDS)."
+  description = "Secreto con la clave del administrador de la base (lo gestiona RDS). La API no usa clave: se conecta con tokens de IAM."
   value       = local.db_admin_arn
-}
-
-output "db_secreto_app_arn" {
-  description = "Secreto con las credenciales del usuario de la aplicación."
-  value       = aws_secretsmanager_secret.db_app.arn
 }
 
 output "cognito_user_pool_id" {
@@ -65,8 +60,23 @@ output "subredes_publicas" {
   value = aws_subnet.publica[*].id
 }
 
-output "grupo_seguridad_api" {
-  value = aws_security_group.api.id
+output "grupo_seguridad_carga" {
+  value = aws_security_group.carga.id
+}
+
+output "api_funcion" {
+  description = "Nombre de la función de la API (vacío mientras no haya imagen)."
+  value       = one(aws_lambda_function.api[*].function_name)
+}
+
+output "trabajos_funcion" {
+  description = "Nombre de la función de trabajos: correos y usuarios (vacío mientras no haya imagen)."
+  value       = one(aws_lambda_function.trabajos[*].function_name)
+}
+
+output "cognito_emisor" {
+  description = "Emisor (iss) de los tokens de Cognito. Las llaves públicas están en <emisor>/.well-known/jwks.json; la API no tiene internet, así que se incluyen en la imagen al construirla."
+  value       = local.cognito_emisor
 }
 
 output "dkim_registros" {

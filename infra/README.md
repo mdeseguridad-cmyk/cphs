@@ -1,32 +1,38 @@
 # Infraestructura del piloto en AWS
 
-Terraform para el piloto de Paritario (10 empresas) en `sa-east-1` (São Paulo), según [`docs/arquitectura-aws.html`](../docs/arquitectura-aws.html). Está escrita y probada, pero **no se ha aplicado**: se aplica cuando exista la aplicación del MVP.
+Terraform para el piloto de Paritario (10 empresas) en `sa-east-1` (São Paulo). Está escrita y probada, pero **no se ha aplicado**: se aplica cuando exista la aplicación del MVP.
 
 ```
 Usuario ─HTTPS─▶ CloudFront ─┬─▶ S3 front (aplicación web)
-                             └─/api/*─▶ Balanceador ─▶ ECS Fargate (API) ─▶ RDS PostgreSQL 16
-                                                            ├─▶ S3 documentos
-                                                            ├─▶ Cognito (usuarios por RUT)
-                                                            └─▶ SES (correo)
+                             └─/api/*─▶ Lambda "api" (en la VPC) ──▶ RDS PostgreSQL 16
+                                             │                 └─▶ S3 documentos
+                                             └─ deja trabajos ─▶ S3 operaciones/trabajos/
+                                                                     │
+                                                                     ▼
+                                             Lambda "trabajos" (fuera de la VPC) ─▶ SES (correo)
+                                                                                 └─▶ Cognito (usuarios)
 ```
+
+La API corre en **AWS Lambda**, sin balanceador ni servidores encendidos: solo cobra cuando recibe solicitudes. La aplicación se construye como una imagen de contenedor normal; [Lambda Web Adapter](https://github.com/awslabs/aws-lambda-web-adapter) traduce las invocaciones a HTTP. Si el tráfico crece, la misma imagen puede correr en ECS Fargate detrás de un balanceador sin cambiar la aplicación.
 
 | Archivo | Qué crea |
 | --- | --- |
-| `red.tf` | VPC con 2 subredes públicas y 2 privadas, sin NAT Gateway; grupos de seguridad |
-| `base_datos.tf` | RDS PostgreSQL 16 privada y cifrada, SSL obligatorio, clave maestra en Secrets Manager, secreto del rol `paritario_app` |
+| `red.tf` | VPC sin NAT Gateway: subredes privadas (base y API) sin salida a internet, con endpoint gratuito hacia S3; subredes públicas solo para la tarea de carga |
+| `base_datos.tf` | RDS PostgreSQL 16 privada y cifrada, SSL obligatorio, ingreso con IAM, clave maestra en Secrets Manager |
 | `almacenamiento.tf` | Buckets `front`, `documentos` (versionado) y `operaciones` (se vacía a los 7 días), todos privados y solo por TLS |
-| `api.tf` | Repositorio ECR, clúster y servicio ECS (ARM64), balanceador, tarea de carga de la base |
-| `front.tf` | CloudFront con encabezados de seguridad; `/api/*` va al balanceador con un encabezado secreto |
+| `api.tf` | Repositorio ECR y las funciones `api` y `trabajos`, con sus permisos |
+| `carga.tf` | Tarea ECS de un solo uso para cargar la base |
+| `front.tf` | CloudFront con encabezados de seguridad; `/api/*` va a la función firmando cada solicitud |
 | `identidad.tf` | Cognito: usuario = RUT, MFA opcional, altas solo por administrador |
 | `correo.tf` | Identidad de SES con DKIM (si se define `dominio_correo`) |
 | `costos.tf` | Presupuesto con alertas por correo |
-| `horario.tf` | Encendido y apagado programado (hora de Chile) |
+| `horario.tf` | Encendido y apagado programado de la base (hora de Chile) |
 
 ## Requisitos
 
 - Terraform 1.9 o superior y AWS CLI v2.
 - Credenciales de un usuario o rol con permisos de administración en la cuenta del piloto, configuradas en su computador (`aws configure` o `aws sso login`). **No las pegue en chats ni las suba al repositorio.**
-- La cuenta nueva parte con SES en modo sandbox y con cuotas bajas de Fargate; ver más abajo.
+- La cuenta nueva parte con SES en modo sandbox y con un máximo de 10 ejecuciones simultáneas de Lambda; ver más abajo.
 
 ## Aplicar
 
@@ -52,11 +58,11 @@ terraform plan -out piloto.plan
 terraform apply piloto.plan
 ```
 
-La primera vez tarda unos 15 minutos (la base de datos y CloudFront son lo más lento). Sin imagen de la API (`api_imagen = ""`) el servicio queda creado con 0 tareas: no cobra cómputo.
+La primera vez tarda unos 15 minutos (la base de datos y CloudFront son lo más lento). Sin imagen de la API (`api_imagen = ""`) las funciones no se crean y CloudFront solo sirve el front.
 
-**Estado de Terraform.** Por defecto queda en `infra/terraform.tfstate`, en su computador. Contiene datos sensibles (la clave de `paritario_app`, el encabezado secreto): no lo suba al repositorio (`.gitignore` ya lo excluye) y respáldelo. Si más de una persona va a aplicar cambios, muévalo a un bucket S3 con versionado agregando un bloque `backend "s3"` en `versions.tf` y ejecutando `terraform init -migrate-state`.
+**Estado de Terraform.** Por defecto queda en `infra/terraform.tfstate`, en su computador. No contiene la clave de la base (la gestiona RDS en Secrets Manager), pero sí la configuración completa: no lo suba al repositorio (`.gitignore` ya lo excluye) y respáldelo. Si más de una persona va a aplicar cambios, muévalo a un bucket S3 con versionado agregando un bloque `backend "s3"` en `versions.tf` y ejecutando `terraform init -migrate-state`.
 
-**Protección contra borrado.** La base, el user pool de Cognito y el balanceador tienen protección contra borrado. `terraform destroy` falla hasta desactivarla a mano; es intencional.
+**Protección contra borrado.** La base y el user pool de Cognito tienen protección contra borrado. `terraform destroy` falla hasta desactivarla a mano; es intencional.
 
 ## Cargar la base de datos
 
@@ -66,13 +72,37 @@ La base está en subredes privadas. `scripts/cargar_base.sh` sube `db/*.sql` al 
 infra/scripts/cargar_base.sh
 ```
 
-Crea el esquema y los catálogos (comunas, actividades, códigos SISESAT) y el rol `paritario_app`, con el que se conecta la API: no es dueño de las tablas y no puede saltarse la seguridad por fila. Su clave está en el secreto `db_secreto_app_arn`. Si la base está apagada por el horario, el script la enciende.
+Crea el esquema y los catálogos (comunas, actividades, códigos SISESAT) y el rol `paritario_app`, con el que se conecta la API: no es dueño de las tablas, no puede saltarse la seguridad por fila y **no tiene clave**. Ingresa con un token de IAM que el SDK de AWS genera en la propia función, válido por 15 minutos. Si la base está apagada por el horario, el script la enciende.
 
 Se puede ejecutar más de una vez: si el esquema ya existe no lo recrea y solo actualiza el rol y sus permisos. Para cambios de esquema posteriores hará falta una herramienta de migraciones en la aplicación.
 
-## Publicar la aplicación
+## Qué necesita la aplicación
 
-**API.** La imagen debe ser ARM64, escuchar en el puerto `api_puerto` (8080) y responder 200 en `api_ruta_salud` (`/api/salud`). Recibe la conexión a la base por variables de entorno (`DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASSWORD`, conexión con `sslmode=require`), además de `DOCUMENTOS_BUCKET`, `COGNITO_USER_POOL_ID`, `COGNITO_CLIENT_ID` y `CORREO_REMITENTE`. El sistema de archivos del contenedor es de solo lectura.
+La misma imagen sirve para las dos funciones; la variable `MODO` las distingue.
+
+**Imagen.** ARM64, con Lambda Web Adapter copiado en `/opt/extensions/`:
+
+```dockerfile
+COPY --from=public.ecr.aws/awsguru/aws-lambda-adapter:0.9.1 /lambda-adapter /opt/extensions/lambda-adapter
+```
+
+La aplicación escucha en `api_puerto` (8080) y responde 200 en `api_ruta_salud` (`/api/salud`) cuando está lista. Debe arrancar rápido: el primer pedido después de un rato sin uso espera ese arranque (1 a 2 segundos).
+
+**Función `api`** (en la VPC, sin internet):
+
+| Tema | Cómo |
+| --- | --- |
+| Base de datos | `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`. Con `DB_AUTH=iam`, la clave es un token de `RDS Signer` del SDK. `DB_SSLMODE=verify-full`: incluya en la imagen el [certificado de RDS](https://truststore.pki.rds.amazonaws.com/sa-east-1/sa-east-1-bundle.pem) |
+| Conexiones | Una conexión por instancia de la función, abierta fuera del manejador y reutilizada. Cada transacción empieza con `SET LOCAL app.usuario_id` |
+| Usuario | El token de Cognito llega en el encabezado **`X-Token-Usuario`**, no en `Authorization` (CloudFront usa ese encabezado para firmar). El emisor está en `COGNITO_EMISOR`; las llaves públicas (`<emisor>/.well-known/jwks.json`) se incluyen en la imagen al construirla, porque la función no tiene internet |
+| Cuerpo de POST/PUT/PATCH | El front envía el SHA-256 del cuerpo en el encabezado `x-amz-content-sha256` (exigencia de CloudFront al firmar hacia Lambda) |
+| Documentos | Máximo 6 MB por solicitud: los archivos se suben y bajan directo desde el navegador con URL firmadas de S3 (`DOCUMENTOS_BUCKET`) |
+| Correo y usuarios | No puede enviar correos ni crear usuarios: deja un JSON en `s3://$OPERACIONES_BUCKET/$TRABAJOS_PREFIJO` |
+| Tiempo | Máximo `api_tiempo_max` (29 s) por solicitud |
+
+**Función `trabajos`** (fuera de la VPC, sin acceso a la base): Lambda Web Adapter le entrega cada evento de S3 como un `POST /interno/trabajos`. Lee el JSON, envía el correo (SES, remitente `CORREO_REMITENTE`) o crea, deshabilita o reinicia el usuario en Cognito, y borra el trabajo. Un trabajo fallido queda en el bucket hasta que vence a los 7 días.
+
+**Publicar la API:**
 
 ```bash
 REPO=$(terraform -chdir=infra output -raw ecr_repositorio)
@@ -83,12 +113,12 @@ aws ecr get-login-password | docker login --username AWS --password-stdin "${REP
 ```
 
 ```bash
-docker buildx build --platform linux/arm64 -t "$REPO:v1" --push .
+docker buildx build --platform linux/arm64 --provenance=false -t "$REPO:v1" --push .
 ```
 
-Las etiquetas del repositorio son inmutables: use una nueva en cada versión. Luego ponga `api_imagen = "<repo>:v1"` en `terraform.tfvars` y aplique; ECS reemplaza las tareas sin cortar el servicio.
+Las etiquetas son inmutables: use una nueva en cada versión. Ponga `api_imagen = "<repo>:v1"` en `terraform.tfvars` y aplique.
 
-**Aplicación web.** Es una aplicación de una página: las rutas sin extensión devuelven `index.html`.
+**Publicar la aplicación web.** Es una aplicación de una página: las rutas sin extensión devuelven `index.html`.
 
 ```bash
 aws s3 sync dist/ "s3://$(terraform -chdir=infra output -raw bucket_front)" --delete
@@ -97,6 +127,8 @@ aws s3 sync dist/ "s3://$(terraform -chdir=infra output -raw bucket_front)" --de
 ```bash
 aws cloudfront create-invalidation --distribution-id "$(terraform -chdir=infra output -raw cloudfront_id)" --paths "/*"
 ```
+
+**Concurrencia.** Las cuentas nuevas parten con un máximo de 10 ejecuciones simultáneas de Lambda en total, lo que de paso protege a la base pequeña. Si AWS amplía la cuota (Service Quotas → Lambda → *Concurrent executions*), fije `api_concurrencia` (por ejemplo, 20) para que la API nunca abra más conexiones de las que la base aguanta.
 
 ## Dominio propio (opcional)
 
@@ -108,32 +140,37 @@ Sin dominio, la aplicación queda en `https://xxxx.cloudfront.net` (salida `url`
 
 ## Antes de cargar datos reales
 
-El piloto puede partir con datos de prueba. Antes de cargar personas reales:
+1. **Correo.** Defina `dominio_correo`, publique en el DNS los tres registros CNAME de la salida `dkim_registros` y pida a AWS salir del sandbox de SES (consola de SES → *Request production access*). En sandbox solo se puede enviar a direcciones verificadas.
+2. Revise el [anexo de privacidad](../docs/anexo-privacidad.html): contrato de encargo con AWS, registro de actividades y plazos de retención.
 
-1. **Cifrar el tramo CloudFront → balanceador.** Sin certificado de origen, ese tramo va por HTTP dentro de la red de AWS, protegido solo por un encabezado secreto. Pida un certificado en ACM **en `sa-east-1`** para un nombre como `origen.app.su-dominio.cl`, cree un CNAME de ese nombre hacia el balanceador (`aws elbv2 describe-load-balancers`), defina `dominio_origen` y `certificado_alb_arn` y aplique. El balanceador pasa a aceptar solo HTTPS en el puerto 443.
-2. **Correo.** Defina `dominio_correo`, publique en el DNS los tres registros CNAME de la salida `dkim_registros` y pida a AWS salir del sandbox de SES (consola de SES → *Request production access*). En sandbox solo se puede enviar a direcciones verificadas.
-3. Revise el [anexo de privacidad](../docs/anexo-privacidad.html): contrato de encargo con AWS, registro de actividades y plazos de retención.
+Todo el tráfico va cifrado de punta a punta: navegador → CloudFront → función (HTTPS firmado) → base (TLS verificado).
 
 ## Horario de encendido
 
-| `horario` | Base y API encendidas |
+| `horario` | Base encendida |
 | --- | --- |
 | `siempre` | Todo el tiempo |
-| `dias_habiles` | Lunes a viernes, 07:00 a 19:45 |
-| `fines_de_semana` | Sábado 07:00 a domingo 23:15 |
+| `dias_habiles` | Lunes a viernes, 07:00 a 20:00 |
+| `fines_de_semana` | Sábado 07:00 a domingo 23:00 |
 
-Todas las horas son de Chile (`America/Santiago`, con cambio de horario incluido). La API se enciende 30 minutos después que la base y se apaga 15 minutos antes.
+Las horas son de Chile (`America/Santiago`, con cambio de horario incluido). La API no necesita horario: no cobra mientras no recibe solicitudes.
 
-Tenga en cuenta:
-
-- **Lo que sigue cobrando apagado:** el balanceador y sus IP públicas, el almacenamiento y los respaldos de la base. El horario ahorra el cómputo de la base y de la API, no el balanceador.
-- RDS vuelve a encender sola una base que lleva 7 días apagada. Con los dos calendarios nunca pasa más de 6 días apagada.
-- Si aplica cambios en horario apagado, Terraform deja la API encendida hasta el siguiente apagado programado.
+- Apagada la base, solo se cobra su almacenamiento y respaldos.
 - Fuera de horario la aplicación responde con error; avise a los usuarios del piloto.
+- RDS vuelve a encender sola una base que lleva 7 días apagada. Con los dos calendarios nunca pasa más de 6 días apagada.
 
 ## Costos
 
-Estimación para `sa-east-1` con la configuración por defecto, siempre encendido: unos **65 a 75 USD al mes**. Lo principal es la base de datos (db.t4g.micro, ~25 USD con almacenamiento), el balanceador (~18 USD), las IP públicas (~11 USD) y la API en Fargate (~8 USD). CloudFront, S3, Cognito (hasta 10.000 usuarios activos al mes), Secrets Manager y CloudWatch suman unos pocos dólares con el volumen del piloto. Confirme los valores en la [calculadora de AWS](https://calculator.aws/) antes de comprometer un presupuesto.
+Estimación para `sa-east-1` con la configuración por defecto, con el volumen de un piloto:
+
+| Componente | Siempre encendida | Días hábiles | Fines de semana |
+| --- | --- | --- | --- |
+| Base de datos (db.t4g.micro + 20 GB) | ~25 USD | ~12 USD | ~9 USD |
+| Lambda, CloudFront, S3, Cognito | ~0–2 USD (niveles gratuitos) | igual | igual |
+| Secrets Manager, CloudWatch | ~1–2 USD | igual | igual |
+| **Total aproximado** | **~28–30 USD/mes** | **~14–16 USD/mes** | **~11–13 USD/mes** |
+
+Lambda incluye cada mes 1 millón de solicitudes y 400.000 GB-segundo gratis; Cognito, 10.000 usuarios activos. No hay IP públicas permanentes, balanceador ni NAT Gateway. Confirme los valores en la [calculadora de AWS](https://calculator.aws/) antes de comprometer un presupuesto.
 
 El presupuesto (`presupuesto_mensual_usd`, 150 por defecto) avisa a `correo_alertas` al llegar al 33 % y al 100 %, y si el pronóstico del mes lo supera. Confirme la suscripción del correo de AWS Budgets.
 
@@ -143,13 +180,13 @@ El piloto deja fuera, a propósito, controles que agregan costo. El análisis co
 
 | Control | Por qué no en el piloto |
 | --- | --- |
-| WAF en CloudFront | ~10–15 USD/mes; el balanceador solo admite CloudFront |
+| WAF en CloudFront | ~10–15 USD/mes |
 | Base Multi-AZ (`db_multi_az`) | Duplica el costo de la base |
-| NAT Gateway (tareas sin IP pública) | ~35 USD/mes; las tareas solo admiten tráfico del balanceador |
-| Llaves KMS propias (S3, Secrets Manager, CloudWatch, ECR) | Se usan las llaves administradas por AWS |
-| Rotación automática de secretos | Requiere una función Lambda de rotación |
-| Registros de acceso (CloudFront, balanceador, S3) y de flujo de la VPC | Costo de almacenamiento y análisis |
-| Performance Insights, monitoreo mejorado, Container Insights | Costo de monitoreo |
+| Llaves KMS propias (S3, Secrets Manager, CloudWatch, ECR, Lambda) | Se usan las llaves administradas por AWS |
+| Firma de código y trazas X-Ray en Lambda | X-Ray necesita salida a internet o un endpoint de pago desde la VPC |
+| Rotación automática de la clave maestra | La API no la usa; solo la tarea de carga |
+| Registros de acceso (CloudFront, S3) y de flujo de la VPC | Costo de almacenamiento y análisis |
+| Performance Insights y monitoreo mejorado de la base | Costo de monitoreo |
 | Retención de registros de 1 año | Se guardan 30 días por minimización de datos (Ley 21.719) |
 | Replicación entre regiones | Los respaldos de RDS y el versionado de documentos bastan para el piloto |
 
@@ -161,7 +198,7 @@ checkov -d infra --framework terraform
 
 ## Pruebas
 
-`tests/piloto.tftest.hcl` prueba la configuración con proveedores simulados, sin cuenta de AWS ni costo: el piloto sin aplicación, el horario de días hábiles y de fines de semana, el dominio propio con correo, el origen cifrado y el rechazo de configuraciones inválidas.
+`tests/piloto.tftest.hcl` prueba la configuración con un proveedor simulado, sin cuenta de AWS ni costo: el piloto sin aplicación, la API en Lambda con horario de días hábiles (red, permisos, variables sin claves, origen de CloudFront, trabajos), el horario de fines de semana, el dominio propio con correo y el rechazo de configuraciones inválidas.
 
 ```bash
 terraform -chdir=infra init -backend=false

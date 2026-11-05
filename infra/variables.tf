@@ -59,37 +59,41 @@ variable "db_multi_az" {
 # --- API -----------------------------------------------------------------
 
 variable "api_imagen" {
-  description = "Imagen de contenedor de la API (repositorio:etiqueta). Vacío = el servicio queda creado con 0 tareas, hasta que exista la aplicación."
+  description = "Imagen de contenedor de la API en el repositorio ECR del piloto (repositorio:etiqueta), ARM64 y con Lambda Web Adapter. Vacío = no se crean las funciones, hasta que exista la aplicación."
   type        = string
   default     = ""
 }
 
-variable "api_tareas" {
-  description = "Número de tareas de la API cuando hay imagen."
-  type        = number
-  default     = 1
-}
-
-variable "api_cpu" {
-  description = "CPU de cada tarea (unidades de Fargate: 256 = 0,25 vCPU)."
-  type        = number
-  default     = 256
-}
-
 variable "api_memoria" {
-  description = "Memoria de cada tarea, en MB."
+  description = "Memoria de la función de la API, en MB. Lambda asigna CPU en proporción a la memoria."
   type        = number
-  default     = 512
+  default     = 1024
+}
+
+variable "api_tiempo_max" {
+  description = "Tiempo máximo de una solicitud a la API, en segundos. CloudFront espera hasta 30."
+  type        = number
+  default     = 29
+  validation {
+    condition     = var.api_tiempo_max >= 3 && var.api_tiempo_max <= 30
+    error_message = "api_tiempo_max debe estar entre 3 y 30 segundos (límite de espera de CloudFront)."
+  }
+}
+
+variable "api_concurrencia" {
+  description = "Ejecuciones simultáneas reservadas para la API; protege a la base de demasiadas conexiones. -1 = sin reserva (las cuentas nuevas parten con un máximo de 10 en total y no admiten reservas hasta que AWS lo amplía)."
+  type        = number
+  default     = -1
 }
 
 variable "api_puerto" {
-  description = "Puerto en que escucha la API dentro del contenedor."
+  description = "Puerto en que escucha la aplicación dentro del contenedor (Lambda Web Adapter le reenvía las solicitudes)."
   type        = number
   default     = 8080
 }
 
 variable "api_ruta_salud" {
-  description = "Ruta que el balanceador consulta para saber si la API está sana."
+  description = "Ruta que Lambda Web Adapter consulta al arrancar para saber que la aplicación está lista."
   type        = string
   default     = "/api/salud"
 }
@@ -104,18 +108,6 @@ variable "dominio" {
 
 variable "certificado_cloudfront_arn" {
   description = "ARN de un certificado de ACM en us-east-1 para el dominio (CloudFront solo acepta certificados de esa región). Obligatorio si se define dominio."
-  type        = string
-  default     = ""
-}
-
-variable "dominio_origen" {
-  description = "Nombre DNS del balanceador para que CloudFront se conecte por HTTPS, p. ej. origen.app.paritario.cl (un CNAME hacia la salida alb_dns). Vacío = el tramo CloudFront→balanceador va por HTTP: aceptable solo con datos de prueba."
-  type        = string
-  default     = ""
-}
-
-variable "certificado_alb_arn" {
-  description = "ARN de un certificado de ACM en la región del despliegue para dominio_origen. Obligatorio si se define dominio_origen."
   type        = string
   default     = ""
 }
