@@ -257,6 +257,23 @@ SELECT pg_temp.verificar('SISESAT: W01.0 sugiere el agente 690',
 SELECT pg_temp.verificar('SISESAT: agente 234 sugiere sus 6 subcódigos (234.1 a 234.6)',
     (SELECT count(*) FROM sugerencias_sisesat('V020') WHERE clasificacion = 'agente_material' AND codigo LIKE '234.%'), 6);
 SELECT pg_temp.verificar('SISESAT: equivalencias con anomalía anotada', (SELECT count(*) FROM equivalencia_cie10_oit WHERE observacion IS NOT NULL), 108);
+SELECT pg_temp.verificar('SISESAT: 1421 naturalezas de lesión (Anexo V)', (SELECT count(*) FROM codigo_sisesat WHERE clasificacion = 'lesion_cie10'), 1421);
+SELECT pg_temp.verificar('SISESAT: S02.00 conserva sus términos adicionales (hueso frontal)',
+    (SELECT count(*) FROM codigo_sisesat WHERE clasificacion = 'lesion_cie10' AND codigo = 'S0200' AND 'FRACTURA CERRADA DEL HUESO FRONTAL' = ANY (terminos)), 1);
+SELECT pg_temp.verificar('SISESAT: 142 ubicaciones anatómicas (Anexo VI)', (SELECT count(*) FROM codigo_sisesat WHERE clasificacion = 'ubicacion_lesion'), 142);
+SELECT pg_temp.verificar('SISESAT: oreja derecha 1.2.1 tiene grafía 121',
+    (SELECT count(*) FROM codigo_sisesat WHERE clasificacion = 'ubicacion_lesion' AND codigo = '1.2.1' AND codigo_alterno = '121'), 1);
+SELECT pg_temp.verificar('SISESAT: 3573 agentes de enfermedad (Anexo IX)', (SELECT count(*) FROM codigo_sisesat WHERE clasificacion = 'agente_enfermedad'), 3573);
+SELECT pg_temp.verificar('SISESAT: 503 agrupaciones del Anexo IX no seleccionables',
+    (SELECT count(*) FROM codigo_sisesat WHERE clasificacion = 'agente_enfermedad' AND NOT seleccionable), 503);
+
+-- Enfermedad profesional codificada con un ítem individual del Anexo IX.
+INSERT INTO investigacion_accidente (comite_id, tipo, fecha_evento, descripcion, agente_enfermedad_id)
+SELECT c.id, 'enfermedad_profesional', '2026-04-01', 'Exposición a sílice', cs.id
+FROM comite c, codigo_sisesat cs
+WHERE c.nombre = 'C1' AND cs.clasificacion = 'agente_enfermedad' AND cs.codigo = '1101000001';
+SELECT pg_temp.verificar('SISESAT: enfermedad profesional con ítem individual aceptada',
+    (SELECT count(*) FROM investigacion_accidente WHERE tipo = 'enfermedad_profesional'), 1);
 SELECT pg_temp.debe_fallar('código SISESAT de otra clasificación (agente usado como forma)',
     $q$UPDATE investigacion_accidente SET forma_id = (SELECT id FROM codigo_sisesat WHERE codigo = 'PRUEBA-A')$q$);
 SELECT pg_temp.debe_fallar('enfermedad profesional codificada con forma de accidente',
@@ -264,6 +281,10 @@ SELECT pg_temp.debe_fallar('enfermedad profesional codificada con forma de accid
 SELECT pg_temp.debe_fallar('accidente con diagnóstico de enfermedad profesional',
     $q$INSERT INTO codigo_sisesat (clasificacion, codigo, descripcion) VALUES ('enfermedad_cie10', 'PRUEBA-E', 'Diagnóstico de prueba');
        UPDATE investigacion_accidente SET diagnostico_enfermedad_id = (SELECT id FROM codigo_sisesat WHERE codigo = 'PRUEBA-E')$q$);
+SELECT pg_temp.debe_fallar('agente de enfermedad que es una agrupación del Anexo IX',
+    $q$UPDATE investigacion_accidente SET agente_enfermedad_id =
+         (SELECT id FROM codigo_sisesat WHERE clasificacion = 'agente_enfermedad' AND codigo = '1100000000')
+       WHERE tipo = 'enfermedad_profesional'$q$);
 SELECT pg_temp.debe_fallar('investigación cerrada sin fecha de cierre',
     $q$UPDATE investigacion_accidente SET estado = 'cerrada'$q$);
 SELECT pg_temp.debe_fallar('empresa con código de actividad inexistente',

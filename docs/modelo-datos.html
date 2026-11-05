@@ -270,7 +270,7 @@ const DOMAINS=[
   ents:[
    {name:"codigo_sisesat", desc:"Códigos SISESAT (SUSESO): forma, agente, ubicación de la lesión, agente de enfermedad, CIE-10.", cols:[
      ["id","bigint","PK",""],["clasificacion","enum","","forma (Anexo II) · agente_material (III) · ubicacion_lesion (VI) · causa_externa_cie10 (I) · lesion_cie10 (V) · agente_enfermedad (IX) · enfermedad_cie10"],
-     ["codigo","varchar(10)","","único por clasificación"],["descripcion","varchar(300)","",""],["codigo_padre","varchar(10)","","nivel superior (OIT o categoría CIE-10)"],["grupo","varchar(300)","","agrupación del anexo"],["vigente","boolean","",""]]},
+     ["codigo","varchar(12)","","único por clasificación"],["descripcion","varchar(300)","",""],["codigo_padre","varchar(12)","","nivel superior (OIT o categoría CIE-10)"],["codigo_alterno","varchar(12)","","otra grafía oficial (Anexo VI: 121)"],["grupo","varchar(300)","","agrupación del anexo"],["terminos","text[]","","otras glosas del mismo código (Anexo V)"],["seleccionable","boolean","","false = agrupación que no se ingresa (Anexo IX)"],["observacion","text","","anomalías del anexo"],["vigente","boolean","",""]]},
    {name:"equivalencia_cie10_oit", desc:"Anexo IV: forma y agente OIT sugeridos para cada causa externa CIE-10.", isNew:true, cols:[
      ["cie10_codigo","varchar(10)","PK","causa externa, p. ej. W015"],["formas_oit","varchar(10)[]","","formas OIT válidas en el Anexo II"],
      ["agentes_oit","varchar(10)[]","","agentes válidos en el Anexo III"],["texto_forma","varchar(60)","","valor original del anexo"],

@@ -567,16 +567,24 @@ COMMENT ON TABLE reunion_asistencia IS 'Asistencia de cada integrante a una reun
 CREATE TABLE codigo_sisesat (
     id             bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     clasificacion  sisesat_clasificacion NOT NULL,
-    codigo         varchar(10)  NOT NULL,
+    codigo         varchar(12)  NOT NULL,
     descripcion    varchar(300) NOT NULL,
-    codigo_padre   varchar(10),
+    codigo_padre   varchar(12),
+    codigo_alterno varchar(12),
     grupo          varchar(300),
+    terminos       text[] NOT NULL DEFAULT '{}',
+    seleccionable  boolean NOT NULL DEFAULT true,
+    observacion    text,
     vigente        boolean NOT NULL DEFAULT true,
     UNIQUE (clasificacion, codigo)
 );
 COMMENT ON TABLE  codigo_sisesat IS 'Códigos de codificación SISESAT (SUSESO) para accidentes y enfermedades profesionales.';
 COMMENT ON COLUMN codigo_sisesat.codigo_padre IS 'Código del nivel superior: forma OIT de 2 dígitos (11 para 11.1), agente OIT (234 para 234.1) o categoría CIE-10 (W01 para W010).';
 COMMENT ON COLUMN codigo_sisesat.grupo IS 'Agrupación con que el anexo presenta el código.';
+COMMENT ON COLUMN codigo_sisesat.codigo_alterno IS 'Otra grafía oficial del código (Anexo VI: 121 para 1.2.1).';
+COMMENT ON COLUMN codigo_sisesat.terminos IS 'Otras glosas del anexo para el mismo código (Anexo V); sirven para buscar.';
+COMMENT ON COLUMN codigo_sisesat.seleccionable IS 'false = agrupación que el anexo indica no ingresar (Anexo IX).';
+COMMENT ON COLUMN codigo_sisesat.observacion IS 'Anomalías del anexo para este código.';
 
 -- Anexo IV: equivalencias entre la causa externa (CIE-10 cap. XX) y la forma
 -- y el agente material OIT. Permiten sugerir forma y agente al codificar.
@@ -608,7 +616,7 @@ LANGUAGE sql STABLE SET search_path = paritario, pg_temp AS $$
           AND coalesce(cs.codigo_padre, cs.codigo) = ANY (e.formas_oit))
       OR (cs.clasificacion = 'agente_material'
           AND (cs.codigo = ANY (e.agentes_oit) OR cs.codigo_padre = ANY (e.agentes_oit)))
-    WHERE e.cie10_codigo = p_cie10 AND cs.vigente
+    WHERE e.cie10_codigo = p_cie10 AND cs.vigente AND cs.seleccionable
     ORDER BY cs.clasificacion, cs.codigo
 $$;
 
@@ -670,6 +678,9 @@ BEGIN
             SELECT 1 FROM codigo_sisesat WHERE id = par.id AND clasificacion = par.clas
         ) THEN
             RAISE EXCEPTION 'El código % no pertenece a la clasificación %', par.id, par.clas;
+        END IF;
+        IF par.id IS NOT NULL AND NOT (SELECT seleccionable FROM codigo_sisesat WHERE id = par.id) THEN
+            RAISE EXCEPTION 'El código % es una agrupación: elija un ítem individual', par.id;
         END IF;
     END LOOP;
     RETURN NEW;

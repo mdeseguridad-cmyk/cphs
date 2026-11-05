@@ -22,7 +22,7 @@ Este repositorio contiene, por ahora, el diseño del producto y el esquema de ba
 | [`db/seed.sql`](db/seed.sql) | Catálogos base: regiones, organismos administradores con su código SUSESO, roles y niveles de certificación generales |
 | [`db/seed_comunas.sql`](db/seed_comunas.sql) | Las 346 comunas con su código único territorial (CUT) vigente desde 2018 |
 | [`db/seed_actividades.sql`](db/seed_actividades.sql) | Las 21 secciones del CIIU4.CL 2012 y los 674 códigos de actividad económica del SII, verificados contra la tabla oficial de homologación |
-| [`db/seed_sisesat.sql`](db/seed_sisesat.sql) | Códigos SISESAT de la SUSESO para investigar accidentes: forma (Anexo II), agente material (Anexo III), causa externa CIE-10 y sus equivalencias (Anexo IV) |
+| [`db/seed_sisesat.sql`](db/seed_sisesat.sql) | Códigos SISESAT de la SUSESO para investigar accidentes y enfermedades (8.641 códigos): forma (Anexo II), agente material (III), causa externa CIE-10 y equivalencias (IV), naturaleza de la lesión (V), ubicación anatómica (VI) y agentes de enfermedad (IX). Se genera con `db/scripts/generar_seed_sisesat.py` |
 | [`db/test_rls.sql`](db/test_rls.sql) | Prueba del aislamiento entre empresas y organismos, y de las reglas de negocio |
 
 Los archivos HTML se abren directamente en el navegador. El diagrama entidad-relación del modelo de datos carga la librería Mermaid desde cdnjs, así que necesita conexión a internet.
@@ -45,7 +45,7 @@ Para verificar el aislamiento y las reglas de negocio sobre una base de prueba (
 psql -d paritario -v ON_ERROR_STOP=1 -f db/test_rls.sql
 ```
 
-Debe terminar con `Todas las verificaciones pasaron.` Son 62 verificaciones; cualquier falla aborta el script con un mensaje `FALLA: …`.
+Debe terminar con `Todas las verificaciones pasaron.` Son 70 verificaciones; cualquier falla aborta el script con un mensaje `FALLA: …`.
 
 ### Cómo funciona el aislamiento
 
@@ -80,8 +80,9 @@ Las vistas `v_cumplimiento_reuniones` y `v_paridad_comite` calculan el cumplimie
 
 ### Pendiente en la base de datos
 
-- Cargar los anexos SISESAT que faltan: V (CIE-10 cap. XIX, naturaleza de la lesión), VI (ubicación anatómica) y IX (agentes de enfermedad), más la CIE-10 cap. I–XVIII para el diagnóstico de enfermedades. Ya están cargados los Anexos II, III y IV.
+- Cargar la CIE-10 cap. I–XVIII (diagnóstico de enfermedades profesionales), que no forma parte de los anexos SISESAT.
 - Revisar con la SUSESO las 108 equivalencias del Anexo IV con anomalías (anotadas en `equivalencia_cie10_oit.observacion`): formas o agentes que no existen en las versiones 2018 de los Anexos II y III, una forma marcada con duda (¿34?) y códigos repetidos.
+- Revisar con la SUSESO 7 códigos mal formados del Anexo IX (anotados en `codigo_sisesat.observacion`): 6 se normalizaron agregando el cero inicial que faltaba; "Ambiente interior (no industrial)" (21100000000) se conserva tal cual porque no tiene una corrección evidente.
 - Confirmar los códigos SUSESO de los organismos administradores (3111 ACHS, 3112 IST, 3113 Mutual de Seguridad) contra el texto vigente del Compendio, y si existe un código para el ISL. Se tomaron de búsquedas sobre el Compendio, sin acceso directo al documento.
 - Definir los plazos de `politica_retencion` con asesoría legal.
 - Las funciones de ámbito devuelven arreglos de ids; con miles de empresas por organismo conviene revisar su rendimiento con datos reales.

@@ -1,11 +1,15 @@
-# Genera db/seed_sisesat.sql desde los Anexos II, III y IV del Manual Técnico
-# de Codificación SISESAT (SUSESO).
+# Genera db/seed_sisesat.sql desde los Anexos II, III, IV, V, VI y IX del Manual
+# Técnico de Codificación SISESAT (SUSESO).
 #
-# Uso: python3 db/scripts/generar_seed_sisesat.py ANEXO_II.xlsx ANEXO_III.xlsx ANEXO_IV.xls db/seed_sisesat.sql
+# Uso:
+#   python3 db/scripts/generar_seed_sisesat.py ANEXO_II.xlsx ANEXO_III.xlsx ANEXO_IV.xls \
+#       ANEXO_V.xls ANEXO_VI.xls ANEXO_IX.xls db/seed_sisesat.sql
 # Requiere: pip install openpyxl xlrd
 
-import sys, re, json, collections, openpyxl, xlrd
-a2, a3, a4, out = sys.argv[1:5]
+import sys, os, re, json, collections, openpyxl, xlrd
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import anexos_v_vi_ix as extra
+a2, a3, a4, a5, a6, a9, out = sys.argv[1:8]
 ws_ = lambda s: re.sub(r'\s+', ' ', s.replace('\xa0', ' ')).strip()
 q = lambda s: "NULL" if s is None else "'" + s.replace("'", "''") + "'"
 
@@ -83,42 +87,59 @@ for code, d in cie.items():
     eq.append((code, formas, agentes, d['f'] or None, d['a'] or None, ' '.join(obs) or None))
 
 arr = lambda xs: "'{" + ",".join(xs) + "}'"
+def arr_txt(xs):
+    if not xs: return "'{}'"
+    return "ARRAY[" + ", ".join(q(x) for x in xs) + "]::text[]"
+v5 = extra.anexo_v(a5); v6 = extra.anexo_vi(a6); v9, norm9, amb9 = extra.anexo_ix(a9)
 L = []
 L.append("""-- =============================================================================
 -- Paritario — códigos SISESAT para la investigación de accidentes.
--- Ejecutar después de schema.sql.
+-- Ejecutar después de schema.sql. Generado con db/scripts/generar_seed_sisesat.py.
 --
 -- Fuentes oficiales (SUSESO, Manual Técnico de Codificación SISESAT):
---   Anexo II   Clasificación de la forma del accidente OIT, códigos SUSESO
---              2018: %d códigos de detalle bajo %d códigos OIT.
---   Anexo III  Clasificación del agente material OIT, versión 2018:
---              %d códigos.
---   Anexo IV   Tabla de equivalencias entre la CIE-10 (cap. XX) y la forma
---              y el agente OIT: %d códigos de causa externa.
+--   Anexo II   Forma del accidente OIT, códigos SUSESO 2018: %d códigos
+--              de detalle bajo %d códigos OIT.
+--   Anexo III  Agente material OIT, versión 2018: %d códigos.
+--   Anexo IV   Equivalencias CIE-10 (cap. XX) con forma y agente OIT:
+--              %d códigos de causa externa.
+--   Anexo V    CIE-10 cap. XIX, naturaleza de la lesión: %d códigos (las
+--              glosas adicionales de un mismo código van en terminos).
+--   Anexo VI   Ubicación anatómica de la lesión OIT: %d códigos, con su
+--              grafía numérica en codigo_alterno (121 = oreja derecha).
+--   Anexo IX   Lista europea de agentes causales de enfermedad: %d códigos;
+--              %d agrupaciones marcadas no seleccionables, según la
+--              instrucción del anexo de ingresar solo ítems individuales.
 --
--- Las equivalencias guardan solo opciones que existen en los Anexos II y III.
--- Anomalías del Anexo IV, anotadas fila por fila en
--- equivalencia_cie10_oit.observacion (filas afectadas):
-""" % (len(forma), len(formas_oit), len(agente), len(cie)))
+-- Anomalías del Anexo IX, anotadas en codigo_sisesat.observacion:
+--   %d códigos sin cero inicial en una columna; se normalizaron (%s).
+--   %d código sin corrección evidente; se conserva tal cual (%s).
+-- La hoja "categorías de productos" del Anexo IX no se carga.
+--
+-- Anomalías del Anexo IV, anotadas en equivalencia_cie10_oit.observacion
+-- (filas afectadas):
+""" % (len(forma), len(formas_oit), len(agente), len(cie), len(v5), len(v6), len(v9),
+       sum(1 for x in v9 if not x['sel']), len(norm9), ", ".join(f"{a}→{b}" for a, b in norm9[:2]) + ", …",
+       len(amb9), ", ".join(amb9)))
 for k, n in sorted(anomalias.items()):
     L.append(f"--   {k}: {n}\n")
 L.append("""--
--- Pendientes: Anexo I (CIE-10 cap. XX completo con intencionalidad), V
--- (CIE-10 cap. XIX), VI (ubicación anatómica), IX (agentes de enfermedad) y
--- CIE-10 cap. I a XVIII.
+-- Pendiente: CIE-10 cap. I a XVIII, para el diagnóstico de enfermedades
+-- profesionales (no forma parte de estos anexos).
 -- =============================================================================
 
 BEGIN;
 SET search_path = paritario, public;
 
-INSERT INTO codigo_sisesat (clasificacion, codigo, codigo_padre, grupo, descripcion) VALUES
+INSERT INTO codigo_sisesat (clasificacion, codigo, codigo_padre, codigo_alterno, grupo, descripcion, terminos, seleccionable, observacion) VALUES
 """)
-vals = [f"    ('forma_accidente', {q(c)}, {q(p)}, {q(g)}, {q(d)})" for c, p, g, d in forma]
-vals += [f"    ('agente_material', {q(c)}, {q(p)}, {q(g)}, {q(d)})" for c, p, g, d in agente]
-vals += [f"    ('causa_externa_cie10', {q(c)}, {q(d['cat'])}, {q(d['grupo'])}, {q(d['desc'])})" for c, d in cie.items()]
+filas = [dict(clas='forma_accidente', codigo=c, padre=p, alterno=None, grupo=g, desc=d, terminos=[], sel=True, obs=None) for c, p, g, d in forma]
+filas += [dict(clas='agente_material', codigo=c, padre=p, alterno=None, grupo=g, desc=d, terminos=[], sel=True, obs=None) for c, p, g, d in agente]
+filas += [dict(clas='causa_externa_cie10', codigo=c, padre=d['cat'], alterno=None, grupo=d['grupo'], desc=d['desc'], terminos=dup.get(c, []), sel=True, obs=None) for c, d in cie.items()]
+filas += v5 + v6 + v9
+vals = [f"    ('{f['clas']}', {q(f['codigo'])}, {q(f['padre'])}, {q(f['alterno'])}, {q(f['grupo'])}, {q(f['desc'])}, {arr_txt(f['terminos'])}, {'true' if f['sel'] else 'false'}, {q(f['obs'])})" for f in filas]
 L.append(",\n".join(vals) + ";\n\nINSERT INTO equivalencia_cie10_oit (cie10_codigo, formas_oit, agentes_oit, texto_forma, texto_agente, observacion) VALUES\n")
 L.append(",\n".join(f"    ({q(c)}, {arr(f)}, {arr(a)}, {q(tf)}, {q(ta)}, {q(o)})" for c, f, a, tf, ta, o in eq) + ";\n\nCOMMIT;\n")
 open(out, 'w', encoding='utf-8').write(''.join(L))
-print(json.dumps(dict(forma=len(forma), agente=len(agente), cie10=len(cie), equivalencias=len(eq),
+print(json.dumps(dict(forma=len(forma), agente=len(agente), cie10=len(cie), lesion=len(v5), ubicacion=len(v6), agente_enfermedad=len(v9), equivalencias=len(eq),
     sin_forma=sum(1 for e in eq if not e[1]), sin_agente=sum(1 for e in eq if not e[2]),
     con_observacion=sum(1 for e in eq if e[5]), anomalias=anomalias), ensure_ascii=False, indent=1))
