@@ -95,12 +95,23 @@ export function tokenDeSolicitud(h: Record<string, string | string[] | undefined
 // Un ingreso por token: el SSO se concilia cuando el usuario obtiene un token nuevo.
 const ingresos = new Map<string, { usuarioId: number; vence: number }>();
 
+// Ingresos en curso: solicitudes simultáneas con el mismo token comparten uno.
+const enCurso = new Map<string, Promise<number>>();
+
 export async function resolverUsuario(pool: pg.Pool, r: Reclamos): Promise<number> {
   const clave = `${r.sub}:${r.emitido}`;
   const ahora = Date.now();
   const enCache = ingresos.get(clave);
   if (enCache && enCache.vence > ahora) return enCache.usuarioId;
+  const pendiente = enCurso.get(clave);
+  if (pendiente) return pendiente;
+  const p = registrar(pool, r, clave).finally(() => enCurso.delete(clave));
+  enCurso.set(clave, p);
+  return p;
+}
 
+async function registrar(pool: pg.Pool, r: Reclamos, clave: string): Promise<number> {
+  const ahora = Date.now();
   const usuarioId = await enTransaccion(pool, null, async (c) => {
     if (r.proveedor) {
       const rows = await varios<{ id: number }>(c, "SELECT ingresar_sso($1, $2, $3, $4, $5) AS id", [

@@ -75,6 +75,19 @@ describe("API de Paritario", { skip: hay ? false : "sin base de pruebas (PGTEST_
       assert.equal(u!.cognito_sub, SUB.coord);
     });
 
+    it("el primer ingreso con solicitudes simultáneas no falla", async () => {
+      await sqlAdmin("INSERT INTO persona (rut, nombres, apellidos) VALUES ('23232323-K', 'Simul', 'Tanea')");
+      await sqlAdmin(
+        `INSERT INTO usuario (rut, persona_id) SELECT rut, id FROM persona WHERE rut = '23232323-K';
+         INSERT INTO usuario_rol (usuario_id, rol_id, empresa_id)
+         SELECT u.id, r.id, e.id FROM usuario u, rol r, empresa e
+          WHERE u.rut = '23232323-K' AND r.codigo = 'AUDITOR' AND e.razon_social = 'Empresa 3'`,
+      );
+      const t = await p.token({ sub: "00000000-0000-0000-0000-0000000000c1", usuario: "23232323-K" });
+      const r = await Promise.all([llamar("GET", "/api/yo", t), llamar("GET", "/api/empresas", t), llamar("GET", "/api/comites", t)]);
+      assert.deepEqual(r.map((x) => x.status), [200, 200, 200]);
+    });
+
     it("una cuenta de Cognito sin usuario en Paritario no entra", async () => {
       const t = await p.token({ sub: "00000000-0000-0000-0000-0000000000ff", usuario: "11111111-1" });
       assert.equal((await llamar("GET", "/api/yo", t)).status, 403);
@@ -287,12 +300,16 @@ describe("API de Paritario", { skip: hay ? false : "sin base de pruebas (PGTEST_
       assert.equal(mal.status, 422);
     });
 
-    it("el cumplimiento se calcula de las reuniones: 1 de 2 exigidas", async () => {
+    it("el cumplimiento cuenta como exigidos los meses ya terminados, aunque no se registren", async () => {
       const r = await llamar("GET", "/api/indicadores?anio=2026", "org");
       const c1 = r.json.find((x: { comite: string }) => x.comite === "C1");
+      // Enero realizada, febrero no realizada; el resto, planificadas: cuentan las de meses ya terminados.
+      const ahora = new Date();
+      const terminados = ahora.getFullYear() > 2026 ? 12 : ahora.getMonth();
+      const exigidas = Math.max(2, terminados);
       assert.equal(c1.reuniones_realizadas, 1);
-      assert.equal(c1.reuniones_exigidas, 2);
-      assert.equal(Number(c1.cumplimiento), 50);
+      assert.equal(c1.reuniones_exigidas, exigidas);
+      assert.equal(Number(c1.cumplimiento), Math.round(1000 / exigidas) / 10);
     });
   });
 

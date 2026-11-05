@@ -305,6 +305,12 @@ SELECT pg_temp.debe_fallar('transferencia internacional sin salvaguarda',
     $q$INSERT INTO encargado_tratamiento (nombre, tipo, pais, transferencia_internacional)
        VALUES ('Nube', 'nube', 'Brasil', true)$q$);
 
+-- Una reunión planificada de un mes ya terminado cuenta como exigida e incumplida.
+INSERT INTO reunion (comite_id, anio, mes, numero) SELECT id, 2026, 2, 2 FROM comite WHERE nombre = 'C1';
+SELECT pg_temp.verificar('cumplimiento: febrero vencido sin registro baja C1 a 50 %',
+    (SELECT (exigidas * 1000 + porcentaje * 10)::bigint FROM v_cumplimiento_reuniones v JOIN comite c ON c.id = v.comite_id
+     WHERE c.nombre = 'C1' AND v.anio = 2026), 2500);
+
 -- Vista de paridad: C1 tiene un solo titular de trabajadores, no es paritario.
 SELECT pg_temp.verificar('paridad: C1 no es paritario',
     (SELECT count(*) FROM v_paridad_comite v JOIN comite c ON c.id = v.comite_id

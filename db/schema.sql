@@ -1076,11 +1076,15 @@ SELECT
     r.anio,
     count(*) FILTER (WHERE r.estado = 'realizada')                  AS realizadas,
     count(*) FILTER (WHERE r.estado = 'no_realizada')               AS no_realizadas,
-    count(*) FILTER (WHERE r.estado <> 'planificada')               AS exigidas,
+    -- Exigidas: las registradas (realizadas o no) y las planificadas cuyo mes
+    -- ya terminó sin registro, que cuentan como incumplidas.
+    count(*) FILTER (WHERE r.estado <> 'planificada' OR v.vencida)  AS exigidas,
+    count(*) FILTER (WHERE r.estado = 'planificada' AND v.vencida)  AS vencidas_sin_registro,
     count(*) FILTER (WHERE r.estado = 'realizada' AND r.acta_documento_id IS NULL) AS realizadas_sin_acta,
     round(100.0 * count(*) FILTER (WHERE r.estado = 'realizada')
-          / nullif(count(*) FILTER (WHERE r.estado <> 'planificada'), 0), 1) AS porcentaje
+          / nullif(count(*) FILTER (WHERE r.estado <> 'planificada' OR v.vencida), 0), 1) AS porcentaje
 FROM reunion r
+CROSS JOIN LATERAL (SELECT make_date(r.anio, r.mes, 1) + interval '1 month' <= current_date AS vencida) v
 GROUP BY r.comite_id, r.anio;
 
 -- Paridad de cada comité: titulares y suplentes vigentes por representación.
@@ -1461,7 +1465,11 @@ DECLARE
 BEGIN
     SELECT * INTO v_usr FROM usuario WHERE cognito_sub = p_cognito_sub;
     IF NOT FOUND THEN
-        SELECT * INTO v_usr FROM usuario WHERE rut = normalizar_rut(p_rut) AND cognito_sub IS NULL;
+        SELECT * INTO v_usr FROM usuario WHERE rut = normalizar_rut(p_rut) AND cognito_sub IS NULL FOR UPDATE;
+    END IF;
+    IF NOT FOUND THEN
+        -- Otra solicitud simultánea del mismo primer ingreso pudo unir la cuenta recién.
+        SELECT * INTO v_usr FROM usuario WHERE cognito_sub = p_cognito_sub;
     END IF;
     IF NOT FOUND THEN
         RAISE EXCEPTION 'Cuenta sin usuario en Paritario' USING ERRCODE = '28000';

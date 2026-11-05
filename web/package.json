@@ -1,0 +1,28 @@
+{
+  "name": "paritario-web",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -p tsconfig.json && vite build",
+    "typecheck": "tsc -p tsconfig.json",
+    "e2e": "tsx test/e2e.ts"
+  },
+  "dependencies": {
+    "amazon-cognito-identity-js": "6.3.12",
+    "react": "18.3.1",
+    "react-dom": "18.3.1",
+    "react-router-dom": "6.28.0"
+  },
+  "devDependencies": {
+    "@types/node": "22.18.8",
+    "@types/react": "18.3.12",
+    "@types/react-dom": "18.3.1",
+    "@vitejs/plugin-react": "4.3.4",
+    "jose": "6.1.0",
+    "tsx": "4.20.6",
+    "typescript": "5.9.3",
+    "vite": "5.4.11"
+  }
+}

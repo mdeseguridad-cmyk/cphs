@@ -98,17 +98,13 @@ El script construye la imagen ARM64 con las llaves públicas del user pool y los
 
 La primera solicitud después de un rato sin uso espera el arranque de la función (1 a 2 segundos).
 
-**Publicar la aplicación web.** Es una aplicación de una página: las rutas sin extensión devuelven `index.html`.
+**Publicar la aplicación web.** Está en [`web/`](../web/README.md):
 
 ```bash
-aws s3 sync dist/ "s3://$(terraform -chdir=infra output -raw bucket_front)" --delete
+web/scripts/publicar.sh
 ```
 
-```bash
-aws cloudfront create-invalidation --distribution-id "$(terraform -chdir=infra output -raw cloudfront_id)" --paths "/*"
-```
-
-**Concurrencia.** Las cuentas nuevas parten con un máximo de 10 ejecuciones simultáneas de Lambda en total, lo que de paso protege a la base pequeña. Si AWS amplía la cuota (Service Quotas → Lambda → *Concurrent executions*), fije `api_concurrencia` (por ejemplo, 20) para que la API nunca abra más conexiones de las que la base aguanta.
+Compila, genera `config.json` con las salidas de Terraform, sube los archivos al bucket del front e invalida la caché de CloudFront. Las rutas sin extensión devuelven `index.html`.
 
 ## Integraciones con clientes y organismos
 

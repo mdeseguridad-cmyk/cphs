@@ -86,3 +86,17 @@ output "dkim_registros" {
     { nombre = "${t}._domainkey.${var.dominio_correo}", tipo = "CNAME", valor = "${t}.dkim.amazonses.com" }
   ] : []
 }
+
+output "cognito_dominio" {
+  description = "Dominio de Cognito para el inicio de sesión de clientes (vacío si no hay proveedores)."
+  value       = local.federado ? "https://${aws_cognito_user_pool_domain.principal[0].domain}.auth.${var.region}.amazoncognito.com" : ""
+}
+
+output "proveedores_identidad" {
+  description = "Nombres de los proveedores de identidad de clientes (botones del inicio de sesión)."
+  value       = nonsensitive(sort(keys(var.proveedores_identidad)))
+}
+
+output "region" {
+  value = var.region
+}

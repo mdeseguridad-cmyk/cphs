@@ -9,7 +9,7 @@
 # sincronizar_accesos_sso() en la base.
 
 locals {
-  federado = length(var.proveedores_identidad) > 0
+  federado = nonsensitive(length(var.proveedores_identidad) > 0) # si hay proveedores no es secreto; sus datos sí
 }
 
 resource "aws_cognito_user_pool" "principal" {
