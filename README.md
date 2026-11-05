@@ -14,7 +14,7 @@ Este repositorio contiene, por ahora, el diseño del producto y el esquema de ba
 | Ruta | Qué es |
 | --- | --- |
 | [`docs/especificacion-funcional.md`](docs/especificacion-funcional.md) | Especificación funcional: módulos, roles, requisitos, cumplimiento, roadmap, costos, comparación de nubes y oferta para organismos |
-| [`docs/prototipo.html`](docs/prototipo.html) | Prototipo navegable con datos de ejemplo (incluye el perfil de organismo en marca blanca) |
+| [`docs/prototipo.html`](docs/prototipo.html) | Prototipo navegable con datos de ejemplo: perfil de organismo en marca blanca e investigación de accidentes con códigos SISESAT reales |
 | [`docs/modelo-datos.html`](docs/modelo-datos.html) | Modelo de datos v5.4: diagrama entidad-relación y las 38 tablas |
 | [`docs/anexo-privacidad.html`](docs/anexo-privacidad.html) | Anexo de privacidad según la Ley 21.719 |
 | [`docs/arquitectura-aws.html`](docs/arquitectura-aws.html) | Arquitectura de referencia en AWS |
