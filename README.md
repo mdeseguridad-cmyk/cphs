@@ -7,7 +7,7 @@ Funciona en dos modos con la misma instalación:
 - **Venta directa** a empresas, sin importar su mutualidad u organismo administrador.
 - **Marca blanca** para organismos administradores (mutualidades o servicios públicos) que la entregan a sus empresas adherentes con su propia marca.
 
-Este repositorio contiene, por ahora, el diseño del producto, el esquema de base de datos y la infraestructura del piloto en AWS (escrita y probada, sin aplicar). Todavía no hay código de aplicación.
+Este repositorio contiene el diseño del producto, el esquema de base de datos, la API del MVP y la infraestructura del piloto en AWS (escrita y probada, sin aplicar). Falta la aplicación web (front).
 
 ## Contenido
 
@@ -24,6 +24,7 @@ Este repositorio contiene, por ahora, el diseño del producto, el esquema de bas
 | [`db/seed_actividades.sql`](db/seed_actividades.sql) | Las 21 secciones del CIIU4.CL 2012 y los 674 códigos de actividad económica del SII, verificados contra la tabla oficial de homologación |
 | [`db/seed_sisesat.sql`](db/seed_sisesat.sql) | Códigos SISESAT de la SUSESO para investigar accidentes y enfermedades (8.641 códigos): forma (Anexo II), agente material (III), causa externa CIE-10 y equivalencias (IV), naturaleza de la lesión (V), ubicación anatómica (VI) y agentes de enfermedad (IX). Se genera con `db/scripts/generar_seed_sisesat.py` |
 | [`db/test_rls.sql`](db/test_rls.sql) | Prueba del aislamiento entre empresas y organismos, y de las reglas de negocio |
+| [`api/`](api/README.md) | API del MVP en TypeScript (Node 22): comités, integrantes, comisiones, programa de trabajo, reuniones, actas, usuarios e integraciones con clientes. Corre en Lambda con la misma imagen que en un contenedor; 35 pruebas contra PostgreSQL real |
 | [`infra/`](infra/README.md) | Terraform del piloto en AWS (`sa-east-1`): red, base de datos, API en Lambda, CloudFront, Cognito, SES, presupuesto y horario de encendido. Incluye el script de carga de la base y pruebas sin cuenta de AWS |
 
 Los archivos HTML se abren directamente en el navegador. El diagrama entidad-relación del modelo de datos carga la librería Mermaid desde cdnjs, así que necesita conexión a internet.

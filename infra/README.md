@@ -77,47 +77,26 @@ Crea el esquema y los catálogos (comunas, actividades, códigos SISESAT) y el r
 
 Se puede ejecutar más de una vez: si el esquema ya existe no lo recrea y solo actualiza el rol y sus permisos. Para cambios de esquema posteriores hará falta una herramienta de migraciones en la aplicación.
 
-## Qué necesita la aplicación
+## Publicar la API
 
-La misma imagen sirve para las dos funciones; la variable `MODO` las distingue.
+La API está en [`api/`](../api/README.md). La misma imagen sirve para las dos funciones; la variable `MODO` las distingue:
 
-**Imagen.** ARM64, con Lambda Web Adapter copiado en `/opt/extensions/`:
-
-```dockerfile
-COPY --from=public.ecr.aws/awsguru/aws-lambda-adapter:0.9.1 /lambda-adapter /opt/extensions/lambda-adapter
-```
-
-La aplicación escucha en `api_puerto` (8080) y responde 200 en `api_ruta_salud` (`/api/salud`) cuando está lista. Debe arrancar rápido: el primer pedido después de un rato sin uso espera ese arranque (1 a 2 segundos).
-
-**Función `api`** (en la VPC, sin internet):
-
-| Tema | Cómo |
-| --- | --- |
-| Base de datos | `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`. Con `DB_AUTH=iam`, la clave es un token de `RDS Signer` del SDK. `DB_SSLMODE=verify-full`: incluya en la imagen el [certificado de RDS](https://truststore.pki.rds.amazonaws.com/sa-east-1/sa-east-1-bundle.pem) |
-| Conexiones | Una conexión por instancia de la función, abierta fuera del manejador y reutilizada. Cada transacción empieza con `SET LOCAL app.usuario_id` |
-| Usuario | El token de Cognito llega en el encabezado **`X-Token-Usuario`**, no en `Authorization` (CloudFront usa ese encabezado para firmar). El emisor está en `COGNITO_EMISOR`; las llaves públicas (`<emisor>/.well-known/jwks.json`) se incluyen en la imagen al construirla, porque la función no tiene internet |
-| Cuerpo de POST/PUT/PATCH | El front envía el SHA-256 del cuerpo en el encabezado `x-amz-content-sha256` (exigencia de CloudFront al firmar hacia Lambda) |
-| Documentos | Máximo 6 MB por solicitud: los archivos se suben y bajan directo desde el navegador con URL firmadas de S3 (`DOCUMENTOS_BUCKET`) |
-| Correo y usuarios | No puede enviar correos ni crear usuarios: deja un JSON en `s3://$OPERACIONES_BUCKET/$TRABAJOS_PREFIJO` |
-| Tiempo | Máximo `api_tiempo_max` (29 s) por solicitud |
-
-**Función `trabajos`** (fuera de la VPC, sin acceso a la base): Lambda Web Adapter le entrega cada evento de S3 como un `POST /interno/trabajos`. Lee el JSON, envía el correo (SES, remitente `CORREO_REMITENTE`) o crea, deshabilita o reinicia el usuario en Cognito, y borra el trabajo. Un trabajo fallido queda en el bucket hasta que vence a los 7 días.
-
-**Publicar la API:**
+- **`api`**: en la VPC, sin internet; llega a la base y a S3.
+- **`trabajos`**: fuera de la VPC; envía correos, administra cuentas de Cognito y consulta servicios de clientes.
 
 ```bash
-REPO=$(terraform -chdir=infra output -raw ecr_repositorio)
+api/scripts/publicar.sh
 ```
 
-```bash
-aws ecr get-login-password | docker login --username AWS --password-stdin "${REPO%%/*}"
-```
+El script construye la imagen ARM64 con las llaves públicas del user pool y los certificados de RDS (la función no tiene internet para bajarlos) y la sube a ECR. Ponga la etiqueta que indica en `api_imagen`, en `terraform.tfvars`, y aplique. Las etiquetas son inmutables: cada versión lleva una nueva.
 
-```bash
-docker buildx build --platform linux/arm64 --provenance=false -t "$REPO:v1" --push .
-```
+**Lo que debe cumplir el front:**
 
-Las etiquetas son inmutables: use una nueva en cada versión. Ponga `api_imagen = "<repo>:v1"` en `terraform.tfvars` y aplique.
+- Enviar el token de identidad de Cognito en **`X-Token-Usuario`**, no en `Authorization` (CloudFront usa ese encabezado para firmar la llamada a la función).
+- En POST, PUT y PATCH, enviar el SHA-256 del cuerpo en `x-amz-content-sha256` (exigencia de CloudFront al firmar hacia Lambda).
+- Subir y bajar los documentos directo a S3 con las URL firmadas que entrega la API: cada solicitud a la API admite hasta 6 MB y 29 segundos.
+
+La primera solicitud después de un rato sin uso espera el arranque de la función (1 a 2 segundos).
 
 **Publicar la aplicación web.** Es una aplicación de una página: las rutas sin extensión devuelven `index.html`.
 
@@ -183,15 +162,14 @@ La sincronización corre a las 07:30, hora de Chile, cuando la base está encend
 aws lambda invoke --function-name "$(terraform -chdir=infra output -raw api_funcion)" --payload '{"tipo":"sincronizar"}' --cli-binary-format raw-in-base64-out /dev/stdout
 ```
 
-### Qué implementa la aplicación
+### Cómo lo hace la API
 
-- **`POST /interno/eventos`** en la API (Lambda Web Adapter entrega ahí los eventos que no son HTTP; CloudFront no expone esa ruta):
-  - `{"tipo": "sincronizar"}`: por cada integración activa de empresas o centros, deja un trabajo en `trabajos/`.
-  - Evento de S3 en `importaciones/`: lee el JSON y llama a `importar_empresas()` o `importar_centros()` en la base; luego borra el archivo.
-- **Función de trabajos**: para un trabajo de sincronización, lee el secreto, consulta el servicio del cliente, convierte la respuesta al formato de la base y la deja en `importaciones/<integracion>/<fecha>.json`.
-- **Ingreso por SSO**: si el token de Cognito viene de un proveedor de cliente, la API llama a `sincronizar_accesos_sso()` con `custom:rut`, `custom:rol_externo` y `custom:contratos` antes de atender la solicitud.
+- La programación diaria invoca a la API, que deja un trabajo por cada integración activa de empresas o centros.
+- La función de trabajos lee el secreto, consulta el servicio del cliente, aplica el mapeo de campos (`configuracion.mapeo` de la integración, p. ej. `{"contrato": "nro_adherente"}`) y deja el resultado en `importaciones/`.
+- S3 avisa a la API, que lo importa con `importar_empresas()` o `importar_centros()` y borra el archivo.
+- En cada ingreso por el SSO de un cliente, la API concilia los accesos con `ingresar_sso()`.
 
-Los formatos de entrada están en los comentarios de esas funciones, en `db/schema.sql`.
+El código está en `api/src/interno/` y los formatos de entrada, en los comentarios de esas funciones en `db/schema.sql`.
 
 ## Dominio propio (opcional)
 

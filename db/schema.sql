@@ -943,6 +943,14 @@ LANGUAGE sql STABLE SECURITY DEFINER SET search_path = paritario, pg_temp AS $$
         UNION
         SELECT ia.persona_id FROM investigacion_accidente ia
         WHERE ia.comite_id = ANY (comites_con_detalle()) AND ia.persona_id IS NOT NULL
+        UNION
+        -- El administrador de una empresa ve a los usuarios con acceso a ella.
+        SELECT u.persona_id FROM usuario u
+        JOIN usuario_rol ur ON ur.usuario_id = u.id AND ur.vigente
+        WHERE u.persona_id IS NOT NULL
+          AND ur.empresa_id IN (SELECT a.empresa_id FROM usuario_rol a
+                                WHERE a.usuario_id = usuario_actual() AND a.vigente
+                                  AND a.rol_id = (SELECT id FROM rol WHERE codigo = 'ADMIN_EMPRESA'))
     ) x(p)
 $$;
 
@@ -1441,5 +1449,86 @@ COMMENT ON FUNCTION sincronizar_accesos_sso IS 'Concilia los accesos que entrega
 REVOKE EXECUTE ON FUNCTION importar_empresas(bigint, jsonb, text) FROM PUBLIC;
 REVOKE EXECUTE ON FUNCTION importar_centros(bigint, jsonb, text) FROM PUBLIC;
 REVOKE EXECUTE ON FUNCTION sincronizar_accesos_sso(bigint, text, uuid, text, text[]) FROM PUBLIC;
+
+-- Ingreso con usuario y contraseña de Paritario (Cognito). Une la cuenta de
+-- Cognito con el usuario por su RUT en el primer ingreso. Devuelve el id del
+-- usuario; falla si no existe o está bloqueado.
+CREATE FUNCTION registrar_ingreso(p_rut text, p_cognito_sub uuid)
+RETURNS bigint
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = paritario, pg_temp AS $$
+DECLARE
+    v_usr usuario%ROWTYPE;
+BEGIN
+    SELECT * INTO v_usr FROM usuario WHERE cognito_sub = p_cognito_sub;
+    IF NOT FOUND THEN
+        SELECT * INTO v_usr FROM usuario WHERE rut = normalizar_rut(p_rut) AND cognito_sub IS NULL;
+    END IF;
+    IF NOT FOUND THEN
+        RAISE EXCEPTION 'Cuenta sin usuario en Paritario' USING ERRCODE = '28000';
+    END IF;
+    IF v_usr.estado = 'bloqueado' THEN
+        RAISE EXCEPTION 'La cuenta está bloqueada' USING ERRCODE = '28000';
+    END IF;
+    UPDATE usuario SET cognito_sub = p_cognito_sub, estado = 'activo', ultimo_acceso = now()
+    WHERE id = v_usr.id;
+    RETURN v_usr.id;
+END;
+$$;
+
+-- Ingreso con el sistema de un cliente: ubica la integración por el nombre del
+-- proveedor en Cognito y concilia los accesos.
+CREATE FUNCTION ingresar_sso(p_proveedor text, p_rut text, p_cognito_sub uuid,
+                             p_rol_externo text, p_contratos text[] DEFAULT '{}')
+RETURNS bigint
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = paritario, pg_temp AS $$
+DECLARE
+    v_int bigint;
+BEGIN
+    SELECT id INTO v_int FROM integracion
+    WHERE tipo = 'sso' AND estado <> 'inactiva' AND configuracion->>'proveedor' = p_proveedor;
+    IF v_int IS NULL THEN
+        RAISE EXCEPTION 'Proveedor de identidad sin integración activa' USING ERRCODE = '28000';
+    END IF;
+    RETURN sincronizar_accesos_sso(v_int, p_rut, p_cognito_sub, p_rol_externo, p_contratos);
+END;
+$$;
+
+-- Integraciones de empresas y centros que la sincronización diaria debe
+-- consultar (la aplicación no las ve sin una sesión de usuario).
+CREATE FUNCTION integraciones_a_sincronizar()
+RETURNS TABLE (id bigint, tipo integracion_tipo, protocolo varchar, secreto_ref varchar, configuracion jsonb)
+LANGUAGE sql STABLE SECURITY DEFINER SET search_path = paritario, pg_temp AS $$
+    SELECT id, tipo, protocolo, secreto_ref, configuracion FROM integracion
+    WHERE tipo IN ('empresas', 'centros') AND estado <> 'inactiva' AND secreto_ref IS NOT NULL
+    ORDER BY id
+$$;
+
+-- Busca una persona por RUT o la crea. Una persona puede integrar comités de
+-- varias empresas: si ya existe, se reutiliza sin modificar sus datos (que
+-- pueden estar fuera del ámbito de quien llama).
+CREATE FUNCTION asegurar_persona(p_rut text, p_nombres text, p_apellidos text, p_email text DEFAULT NULL)
+RETURNS bigint
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = paritario, pg_temp AS $$
+DECLARE
+    v_rut text := normalizar_rut(p_rut);
+    v_id  bigint;
+BEGIN
+    IF usuario_actual() IS NULL THEN
+        RAISE EXCEPTION 'Se requiere una sesión de usuario';
+    END IF;
+    SELECT id INTO v_id FROM persona WHERE rut = v_rut;
+    IF v_id IS NULL THEN
+        INSERT INTO persona (rut, nombres, apellidos, email)
+        VALUES (v_rut, p_nombres, p_apellidos, p_email)
+        RETURNING id INTO v_id;
+    END IF;
+    RETURN v_id;
+END;
+$$;
+
+REVOKE EXECUTE ON FUNCTION registrar_ingreso(text, uuid) FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION ingresar_sso(text, text, uuid, text, text[]) FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION integraciones_a_sincronizar() FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION asegurar_persona(text, text, text, text) FROM PUBLIC;
 
 COMMIT;

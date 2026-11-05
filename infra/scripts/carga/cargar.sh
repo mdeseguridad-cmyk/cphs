@@ -49,6 +49,9 @@ SELECT format('GRANT CONNECT ON DATABASE %I TO %I', current_database(), :'app') 
 SELECT format('GRANT USAGE ON SCHEMA paritario TO %I', :'app') \gexec
 SELECT format('GRANT SELECT, INSERT, UPDATE ON ALL TABLES IN SCHEMA paritario TO %I', :'app') \gexec
 SELECT format('GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA paritario TO %I', :'app') \gexec
+-- Las únicas filas que la aplicación borra: miembros de una comisión (se
+-- reemplazan al editarla). Todo lo demás se marca, nunca se borra.
+SELECT format('GRANT DELETE ON paritario.comision_integrante TO %I', :'app') \gexec
 -- Funciones de integración (importar empresas y centros, accesos del SSO).
 SELECT format('GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA paritario TO %I', :'app') \gexec
 SELECT format('ALTER DEFAULT PRIVILEGES IN SCHEMA paritario GRANT SELECT, INSERT, UPDATE ON TABLES TO %I', :'app') \gexec
