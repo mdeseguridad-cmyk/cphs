@@ -1,6 +1,6 @@
 -- =============================================================================
 -- Paritario — esquema de base de datos (PostgreSQL 16)
--- Modelo de datos v5.6: 40 tablas en 5 dominios.
+-- Modelo de datos v5.7: 40 tablas en 5 dominios.
 --
 --   01 Organización ........... organismo_administrador, organismo, empresa,
 --                               sucursal, integracion, rol_externo,

@@ -155,7 +155,7 @@
     <div class="band">
       <div class="bh">Front estático e identidad</div>
       <div class="row">
-        <div class="node edge"><span class="ico i-edge"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7l9-4 9 4-9 4-9-4zM3 7v10l9 4 9-4V7"/></svg></span><span><div class="nm">S3 — SPA</div><div class="sv">React / Angular estático</div><div class="svc">sitio distribuido por CloudFront</div></span></div>
+        <div class="node edge"><span class="ico i-edge"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7l9-4 9 4-9 4-9-4zM3 7v10l9 4 9-4V7"/></svg></span><span><div class="nm">S3 — SPA</div><div class="sv">React + TypeScript (<code>web/</code>)</div><div class="svc">config.json leído al cargar</div></span></div>
         <div class="node sec"><span class="ico i-sec"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="10" width="16" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg></span><span><div class="nm">Cognito</div><div class="sv">Identidad, MFA, roles</div><div class="svc">federa el SSO del cliente (SAML/OIDC)</div></span></div>
       </div>
     </div>
@@ -168,7 +168,7 @@
       <div class="subnet">
         <div class="sh">Subred privada — aplicación (sin salida a internet)<span class="az">2 zonas</span></div>
         <div class="row">
-          <div class="node app"><span class="ico i-app"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2L3 14h7l-1 8 10-12h-7l1-8z"/></svg></span><span><div class="nm">Lambda — API</div><div class="sv">imagen de contenedor · Lambda Web Adapter</div><div class="svc">URL firmada: solo CloudFront la invoca</div></span></div>
+          <div class="node app"><span class="ico i-app"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2L3 14h7l-1 8 10-12h-7l1-8z"/></svg></span><span><div class="nm">Lambda — API</div><div class="sv">TypeScript · Node 22 (<code>api/</code>) · Lambda Web Adapter</div><div class="svc">URL firmada: solo CloudFront la invoca</div></span></div>
           <div class="node app"><span class="ico i-app"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 12h16M14 6l6 6-6 6"/></svg></span><span><div class="nm">Endpoint de S3</div><div class="sv">tipo gateway · sin costo</div><div class="svc">solo los buckets del sistema</div></span></div>
         </div>
       </div>
@@ -225,7 +225,7 @@
       <span class="step">Lambda (API)</span><span class="arrow">→</span>
       <span class="step">RDS · S3</span>
     </div>
-    <p style="font-size:12.5px;color:var(--muted);margin-top:10px">El usuario se identifica con Cognito y envía su token en cada llamada. CloudFront firma la llamada a la función, que nadie más puede invocar. La API valida el token, abre la transacción indicando qué usuario opera y la base aplica la seguridad por fila.</p>
+    <p style="font-size:12.5px;color:var(--muted);margin-top:10px">El usuario se identifica con Cognito y el front envía su token en el encabezado <code>X-Token-Usuario</code>, junto con el SHA-256 del cuerpo en <code>x-amz-content-sha256</code>. CloudFront firma la llamada a la función (usa <code>Authorization</code> para eso), que nadie más puede invocar. La API valida el token, abre la transacción indicando qué usuario opera y la base aplica la seguridad por fila.</p>
     <div class="flow" style="margin-top:12px">
       <span class="step">Lambda (API)</span><span class="arrow">→</span>
       <span class="step">S3 operaciones/trabajos/</span><span class="arrow">→</span>
@@ -303,6 +303,24 @@
       <tr><td>NAT Gateway o endpoints privados</td><td>Si la API necesita llamar servicios externos directamente</td><td>Salida controlada a internet desde la red privada</td></tr>
       <tr><td>Llaves KMS propias, registros de acceso y de flujo, Performance Insights</td><td>Producción</td><td>Auditoría, control de llaves y diagnóstico</td></tr>
     </table></div>
+  </section>
+
+  <section>
+    <div class="sec-h"><span class="n">6</span><h2>Código, pruebas y despliegue</h2></div>
+    <p style="font-size:13px;color:var(--muted);margin:0 0 10px">Todo el MVP está en el repositorio y probado sin una cuenta de AWS. La infraestructura aún no se aplica.</p>
+    <div class="tbl"><table class="ev">
+      <tr><th>Carpeta</th><th>Qué contiene</th><th>Cómo se prueba</th></tr>
+      <tr><td><code>db/</code></td><td>Esquema PostgreSQL 16 con seguridad por fila, catálogos oficiales y funciones de integración</td><td>96 verificaciones de aislamiento y reglas de negocio</td></tr>
+      <tr><td><code>api/</code></td><td>API del MVP (Fastify); la misma imagen corre como función <code>api</code> y <code>trabajos</code></td><td>37 pruebas contra PostgreSQL real; S3, Cognito y SES en memoria</td></tr>
+      <tr><td><code>web/</code></td><td>Aplicación web (React + Vite)</td><td>Prueba de punta a punta en Chromium con la API real, por rol, en escritorio y teléfono</td></tr>
+      <tr><td><code>infra/</code></td><td>Terraform del piloto, carga de la base y horario de encendido</td><td>10 pruebas con proveedor simulado y checkov sin fallas</td></tr>
+    </table></div>
+    <div class="card" style="margin-top:12px"><h3>Puesta en marcha (desde el computador del equipo, con sus credenciales)</h3><ul>
+      <li><code>terraform apply</code> en <code>infra/</code>: red, base, buckets, Cognito y CloudFront.</li>
+      <li><code>infra/scripts/cargar_base.sh</code>: esquema, catálogos y rol de la aplicación.</li>
+      <li><code>api/scripts/publicar.sh</code>: imagen ARM64 a ECR; luego <code>api_imagen</code> en Terraform y otro <code>apply</code>.</li>
+      <li><code>web/scripts/publicar.sh</code>: front y su <code>config.json</code> al bucket, con invalidación de CloudFront.</li>
+    </ul></div>
   </section>
 
   <footer>Arquitectura de referencia · orientación de diseño · la región definitiva depende de la evaluación legal de residencia de datos (Ley 21.719).</footer>

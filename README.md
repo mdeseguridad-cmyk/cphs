@@ -15,7 +15,7 @@ Este repositorio contiene el diseño del producto, el esquema de base de datos, 
 | --- | --- |
 | [`docs/especificacion-funcional.md`](docs/especificacion-funcional.md) | Especificación funcional: módulos, roles, requisitos, cumplimiento, roadmap, costos, comparación de nubes y oferta para organismos |
 | [`docs/prototipo.html`](docs/prototipo.html) | Prototipo navegable con datos de ejemplo: perfil de organismo en marca blanca, investigación de accidentes con códigos SISESAT reales, invitación de usuarios, centros sincronizados e integraciones del organismo |
-| [`docs/modelo-datos.html`](docs/modelo-datos.html) | Modelo de datos v5.6: diagrama entidad-relación y las 40 tablas |
+| [`docs/modelo-datos.html`](docs/modelo-datos.html) | Modelo de datos v5.7: diagrama entidad-relación y las 40 tablas |
 | [`docs/anexo-privacidad.html`](docs/anexo-privacidad.html) | Anexo de privacidad según la Ley 21.719 |
 | [`docs/arquitectura-aws.html`](docs/arquitectura-aws.html) | Arquitectura de referencia en AWS |
 | [`db/schema.sql`](db/schema.sql) | Esquema PostgreSQL 16: 40 tablas, restricciones, seguridad por fila y funciones de integración con clientes (empresas, centros y accesos por SSO) |
