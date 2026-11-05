@@ -135,17 +135,21 @@
         <tr><td><b>Contacto</b></td><td>Email, teléfono</td><td>Convocatoria y notificaciones</td><td><span class="pill norm">Común</span></td><td>Mientras sea integrante</td></tr>
         <tr><td><b>Participación</b></td><td>Cargo, representación, asistencia</td><td>Gestión y actas del comité</td><td><span class="pill norm">Común</span></td><td>Conservación legal (actas)</td></tr>
         <tr><td><b>Salud / siniestros</b></td><td>Investigación de accidentes y enfermedades profesionales</td><td>Prevención y medidas correctivas</td><td><span class="pill sens">Sensible</span></td><td>Acceso reforzado · retención específica</td></tr>
-        <tr><td><b>Acceso al sistema</b></td><td>Credencial, rol, bitácora</td><td>Seguridad y trazabilidad</td><td><span class="pill norm">Común</span></td><td>Según política de logs</td></tr>
+        <tr><td><b>Acceso al sistema</b></td><td>RUT de usuario, identificador de la cuenta, estado (invitada, activa, bloqueada), rol, bitácora. <b>Sin contraseñas:</b> las guarda el servicio de identidad, no Paritario</td><td>Seguridad y trazabilidad</td><td><span class="pill norm">Común</span></td><td>Cuenta: se bloquea, no se borra · bitácora según política</td></tr>
+        <tr><td><b>Registros técnicos</b></td><td>Errores y eventos de la aplicación (sin datos personales)</td><td>Operación y diagnóstico</td><td><span class="pill norm">Común</span></td><td>30 días</td></tr>
       </tbody>
     </table></div>
-    <p style="font-size:12.5px;color:var(--muted);margin-top:10px">Los <b>datos de salud</b> de la investigación de accidentes son de categoría especial: se marcan con <code>documento.contiene_datos_sensibles</code> y reciben control de acceso más estricto.</p>
+    <p style="font-size:12.5px;color:var(--muted);margin-top:10px">Los <b>datos de salud</b> de la investigación de accidentes son de categoría especial: se marcan con <code>documento.contiene_datos_sensibles</code> y reciben control de acceso más estricto. Cada documento queda registrado con su huella SHA-256, lo que permite demostrar que un acta no fue alterada.</p>
   </section>
 
   <section>
     <div class="sec-h"><span class="n">4</span><h2>Principios y cómo los cumple el sistema</h2></div>
     <ul class="clean">
       <li><b>Finalidad y proporcionalidad.</b> Se tratan solo los datos necesarios para la gestión del comité; el modelo guarda campos mínimos.</li>
-      <li><b>Seguridad.</b> Cifrado en tránsito y reposo, control de acceso por ámbito (<code>usuario_rol</code> con empresa/comité), archivos en almacenamiento privado, secretos en bóveda, MFA para usuarios.</li>
+      <li><b>Seguridad.</b> Cifrado en tránsito de punta a punta y en reposo; control de acceso por ámbito (<code>usuario_rol</code> con empresa/comité) que aplica la propia base de datos; MFA para usuarios.</li>
+      <li><b>Sin contraseñas que filtrar.</b> Paritario no guarda contraseñas de usuarios: las gestiona el servicio de identidad (Cognito). La aplicación tampoco usa una clave para entrar a la base: se conecta con credenciales temporales de AWS.</li>
+      <li><b>Exposición mínima.</b> La aplicación y la base de datos no tienen salida a internet. El componente que envía correos y crea cuentas no tiene acceso a la base. Los archivos son privados y se suben y bajan con enlaces firmados de corta duración.</li>
+      <li><b>Minimización en registros.</b> Los registros técnicos se borran a los 30 días y no deben contener datos personales; los correos no incluyen datos sensibles en su cuerpo.</li>
       <li><b>Confidencialidad.</b> Cada rol (Administrador, Coordinador, Auditor) ve solo lo de su ámbito; los datos sensibles tienen acceso restringido.</li>
       <li><b>Calidad.</b> Catálogos (región/comuna) y validaciones evitan datos erróneos o duplicados.</li>
       <li><b>Responsabilidad proactiva.</b> <code>log_acceso</code> permite demostrar quién accedió a qué y cuándo.</li>
@@ -182,6 +186,19 @@
       <li><b>Transferencia internacional — punto crítico.</b> AWS aún no tiene región en Chile (anunciada para fines de 2026); hoy la más cercana es <b>São Paulo (Brasil)</b>, lo que implica una transferencia internacional con salvaguardas (cláusulas tipo) y debe informarse a los clientes. Azure ya tiene región en Chile (Chile Central). Debe decidirse con criterio legal antes de elegir la nube.</li>
       <li><b>Subencargados.</b> La nube y otros servicios que toquen datos se listan en <code>encargado_tratamiento</code> y se informan a los clientes, que deben autorizarlos en el DPA.</li>
     </ul>
+    <p style="font-size:13.5px;margin:16px 0 10px"><b>Servicios de AWS que tratan datos</b> (instalación del piloto, región São Paulo):</p>
+    <div class="tablewrap"><table>
+      <thead><tr><th>Servicio</th><th>Qué datos</th><th>Dónde y cómo</th></tr></thead>
+      <tbody>
+        <tr><td><b>RDS PostgreSQL</b></td><td>Toda la información de los comités, incluidos datos de salud</td><td>São Paulo · red privada sin internet · cifrada · respaldos 7 días</td></tr>
+        <tr><td><b>S3</b></td><td>Actas y documentos (pueden contener datos de salud)</td><td>São Paulo · privado · cifrado · versionado</td></tr>
+        <tr><td><b>Lambda (API)</b></td><td>Procesa cada solicitud; no guarda datos</td><td>São Paulo · red privada sin internet</td></tr>
+        <tr><td><b>Cognito</b></td><td>RUT, correo, contraseña (la gestiona el servicio) y estado de MFA</td><td>São Paulo</td></tr>
+        <tr><td><b>Lambda (trabajos) y SES</b></td><td>Correos: destinatario y aviso, sin datos sensibles</td><td>São Paulo · sin acceso a la base</td></tr>
+        <tr><td><b>CloudFront</b></td><td>Tráfico cifrado en tránsito; solo guarda en caché la aplicación web, nunca respuestas con datos</td><td>Red global de AWS: atiende desde el punto más cercano al usuario</td></tr>
+        <tr><td><b>CloudWatch</b></td><td>Registros técnicos</td><td>São Paulo · 30 días</td></tr>
+      </tbody>
+    </table></div>
   </section>
 
   <section>
@@ -208,7 +225,7 @@
     </div>
   </section>
 
-  <footer>Anexo v3 · producto independiente con marca blanca · Ley 21.719 / Ley 19.628 · orientación de diseño, no asesoría legal · validar con asesoría legal.</footer>
+  <footer>Anexo v4 · producto independiente con marca blanca · Ley 21.719 / Ley 19.628 · orientación de diseño, no asesoría legal · validar con asesoría legal.</footer>
 </div>
 
 <script>
@@ -226,6 +243,9 @@ const CHECKS=[
   ["Definir en el contrato con cada organismo quién es responsable","Marca blanca: organismo, empresas y proveedor"],
   ["Limitar la vista del organismo a indicadores agregados","Detalle de personas solo con finalidad y bitácora"],
   ["Capacitar a usuarios y comités en protección de datos","Cultura y uso correcto"],
+  ["Exigir MFA a los administradores de empresa y organismo","Hoy es opcional para todos los usuarios"],
+  ["Revisar que los registros técnicos no contengan datos personales","Antes de cargar datos reales"],
+  ["Aceptar el contrato de encargo de AWS e inscribirlo como subencargado","Servicios y región de la tabla de la sección 8"],
 ];
 const esc=s=>String(s).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
 let state={};
