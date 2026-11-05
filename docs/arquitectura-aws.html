@@ -104,6 +104,14 @@
   code{font-family:var(--f-mono);font-size:11.5px;background:var(--surface-2);padding:1px 5px;border-radius:5px;border:1px solid var(--border)}
 
   footer{margin-top:36px;padding-top:18px;border-top:1px solid var(--border);color:var(--faint);font-size:12px}
+  .tag{display:inline-block;font-size:9.5px;font-weight:700;letter-spacing:.03em;padding:1px 7px;border-radius:10px;margin-left:6px;vertical-align:1px;background:var(--warn-soft);color:var(--warn)}
+  .outside{border:1px dashed var(--border-strong);border-radius:12px;padding:11px 12px;margin-top:10px;background:var(--surface)}
+  .outside>.sh{font-size:10.5px;letter-spacing:.05em;text-transform:uppercase;color:var(--faint);font-weight:700;margin-bottom:9px}
+  table.ev{width:100%;border-collapse:collapse;background:var(--surface);border:1px solid var(--border);border-radius:12px;overflow:hidden;box-shadow:var(--shadow);font-size:12.5px}
+  table.ev th,table.ev td{text-align:left;padding:9px 12px;border-bottom:1px solid var(--border);vertical-align:top}
+  table.ev th{font-size:11px;letter-spacing:.05em;text-transform:uppercase;color:var(--faint);background:var(--surface-2)}
+  table.ev tr:last-child td{border-bottom:0}
+  .tbl{overflow-x:auto}
   @media(max-width:640px){header.hero h1{font-size:23px}.grid2{grid-template-columns:1fr}.node{min-width:calc(50% - 5px)}}
 </style>
 
@@ -112,7 +120,7 @@
     <button class="themebtn" id="themebtn" aria-label="Cambiar tema"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="4.5"/><path d="M12 2v2.5M12 19.5V22M4.2 4.2l1.8 1.8M18 18l1.8 1.8M2 12h2.5M19.5 12H22M4.2 19.8l1.8-1.8M18 6l1.8-1.8"/></svg></button>
     <div class="eyebrow">Arquitectura de referencia</div>
     <h1>Arquitectura AWS · Sistema de Comités Paritarios</h1>
-    <p>Despliegue sobre Linux con API y SPA desacoplados, base de datos administrada y almacenamiento de objetos. Alta disponibilidad Multi-AZ, cifrado de extremo a extremo y aislamiento de red por VPC. Una sola instalación sirve a todas las empresas cliente y a los organismos que la ofrecen con su propia marca, con los datos aislados, en una cuenta AWS propia del proveedor: sin dependencia de ninguna mutualidad. Diseño preparado para la decisión de residencia de datos (Ley 21.719).</p>
+    <p>Despliegue sobre Linux con API y SPA desacoplados, base de datos administrada y almacenamiento de objetos, cifrado de extremo a extremo y aislamiento de red por VPC. El diagrama muestra la <b>instalación del piloto</b>, escrita en Terraform (<code>infra/</code>): la API corre en AWS Lambda, sin balanceador ni servidores encendidos. La sección 5 explica qué se agrega para producción. Una sola instalación sirve a todas las empresas cliente y a los organismos que la ofrecen con su propia marca, con los datos aislados, en una cuenta AWS propia del proveedor: sin dependencia de ninguna mutualidad. Diseño preparado para la decisión de residencia de datos (Ley 21.719).</p>
     <div class="legend">
       <span class="lg"><span class="sw" style="background:var(--edge)"></span>Borde / entrega</span>
       <span class="lg"><span class="sw" style="background:var(--app)"></span>Aplicación</span>
@@ -136,9 +144,9 @@
     <div class="band">
       <div class="bh">Borde y entrega</div>
       <div class="row">
-        <div class="node edge"><span class="ico i-edge"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3 3 15 0 18M12 3c-3 3-3 15 0 18"/></svg></span><span><div class="nm">Route 53</div><div class="sv">DNS</div><div class="svc">app.paritario.cl (ejemplo)</div></span></div>
-        <div class="node edge"><span class="ico i-edge"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7h16M4 12h16M4 17h16"/></svg></span><span><div class="nm">CloudFront</div><div class="sv">CDN</div><div class="svc">caché + TLS (ACM)</div></span></div>
-        <div class="node edge"><span class="ico i-edge"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3l7 3v5c0 4.4-3 7.6-7 9-4-1.4-7-4.6-7-9V6l7-3z"/></svg></span><span><div class="nm">AWS WAF</div><div class="sv">Firewall de aplicación</div><div class="svc">reglas gestionadas</div></span></div>
+        <div class="node edge"><span class="ico i-edge"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3 3 15 0 18M12 3c-3 3-3 15 0 18"/></svg></span><span><div class="nm">DNS del dominio</div><div class="sv">opcional en el piloto</div><div class="svc">app.paritario.cl (ejemplo)</div></span></div>
+        <div class="node edge"><span class="ico i-edge"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7h16M4 12h16M4 17h16"/></svg></span><span><div class="nm">CloudFront</div><div class="sv">CDN</div><div class="svc">TLS (ACM) · firma las llamadas a la API</div></span></div>
+        <div class="node edge"><span class="ico i-edge"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3l7 3v5c0 4.4-3 7.6-7 9-4-1.4-7-4.6-7-9V6l7-3z"/></svg></span><span><div class="nm">AWS WAF<span class="tag">producción</span></div><div class="sv">Firewall de aplicación</div><div class="svc">reglas gestionadas</div></span></div>
       </div>
     </div>
     <div class="flowdown">↓</div>
@@ -155,30 +163,36 @@
 
     <!-- VPC -->
     <div class="vpc">
-      <div class="vh"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>VPC — red privada aislada</div>
+      <div class="vh"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>VPC — red privada aislada, sin NAT Gateway</div>
 
       <div class="subnet">
-        <div class="sh">Subred pública<span class="az">Multi-AZ</span></div>
+        <div class="sh">Subred privada — aplicación (sin salida a internet)<span class="az">2 zonas</span></div>
         <div class="row">
-          <div class="node app"><span class="ico i-app"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v18M5 8l7-5 7 5M5 8v8l7 5 7-5V8"/></svg></span><span><div class="nm">Application Load Balancer</div><div class="sv">HTTPS · enrutamiento · sticky sessions</div></span></div>
-          <div class="node app"><span class="ico i-app"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 12h16M12 4v16"/></svg></span><span><div class="nm">NAT Gateway</div><div class="sv">salida controlada a internet</div></span></div>
+          <div class="node app"><span class="ico i-app"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2L3 14h7l-1 8 10-12h-7l1-8z"/></svg></span><span><div class="nm">Lambda — API</div><div class="sv">imagen de contenedor · Lambda Web Adapter</div><div class="svc">URL firmada: solo CloudFront la invoca</div></span></div>
+          <div class="node app"><span class="ico i-app"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 12h16M14 6l6 6-6 6"/></svg></span><span><div class="nm">Endpoint de S3</div><div class="sv">tipo gateway · sin costo</div><div class="svc">solo los buckets del sistema</div></span></div>
         </div>
       </div>
 
       <div class="subnet">
-        <div class="sh">Subred privada — aplicación<span class="az">Multi-AZ</span></div>
+        <div class="sh">Subred privada — datos (sin salida a internet)<span class="az">2 zonas</span></div>
         <div class="row">
-          <div class="node app"><span class="ico i-app"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="8" height="8" rx="1.5"/><rect x="13" y="3" width="8" height="8" rx="1.5"/><rect x="3" y="13" width="8" height="8" rx="1.5"/><rect x="13" y="13" width="8" height="8" rx="1.5"/></svg></span><span><div class="nm">ECS Fargate — API</div><div class="sv">ASP.NET Core / Node · contenedores</div><div class="svc">Auto Scaling</div></span></div>
-          <div class="node sec"><span class="ico i-sec"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2L3 14h7l-1 8 10-12h-7l1-8z"/></svg></span><span><div class="nm">Lambda + EventBridge</div><div class="sv">tareas programadas</div><div class="svc">alertas, vencimientos, cierres</div></span></div>
+          <div class="node data"><span class="ico i-data"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v14c0 1.7 3.6 3 8 3s8-1.3 8-3V5M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3"/></svg></span><span><div class="nm">RDS PostgreSQL 16</div><div class="sv">seguridad por fila · ingreso con IAM</div><div class="svc">cifrada · SSL obligatorio · respaldos 7 días</div></span></div>
         </div>
       </div>
 
       <div class="subnet">
-        <div class="sh">Subred privada — datos (sin salida a internet)<span class="az">Multi-AZ</span></div>
+        <div class="sh">Subred pública — operación</div>
         <div class="row">
-          <div class="node data"><span class="ico i-data"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v14c0 1.7 3.6 3 8 3s8-1.3 8-3V5M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3"/></svg></span><span><div class="nm">RDS PostgreSQL</div><div class="sv">base de datos · Multi-AZ</div><div class="svc">cifrada (KMS) · backups</div></span></div>
-          <div class="node data"><span class="ico i-data"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6c0-1.7 3.6-3 8-3s8 1.3 8 3-3.6 3-8 3-8-1.3-8-3zM4 6v12c0 1.7 3.6 3 8 3s8-1.3 8-3V6"/></svg></span><span><div class="nm">ElastiCache Redis</div><div class="sv">sesión y caché</div><div class="svc">escalado horizontal</div></span></div>
+          <div class="node app"><span class="ico i-app"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="8" height="8" rx="1.5"/><rect x="13" y="3" width="8" height="8" rx="1.5"/><rect x="3" y="13" width="8" height="8" rx="1.5"/><rect x="13" y="13" width="8" height="8" rx="1.5"/></svg></span><span><div class="nm">ECS Fargate — carga de la base</div><div class="sv">tarea de un solo uso, a mano</div><div class="svc">esquema, catálogos y rol de la aplicación</div></span></div>
         </div>
+      </div>
+    </div>
+
+    <div class="outside">
+      <div class="sh">Fuera de la VPC — tareas que necesitan internet</div>
+      <div class="row">
+        <div class="node sec"><span class="ico i-sec"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2L3 14h7l-1 8 10-12h-7l1-8z"/></svg></span><span><div class="nm">Lambda — trabajos</div><div class="sv">correos (SES) y usuarios (Cognito)</div><div class="svc">la invoca S3; no llega a la base</div></span></div>
+        <div class="node sec"><span class="ico i-sec"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></span><span><div class="nm">EventBridge Scheduler</div><div class="sv">encendido de la base · tareas programadas</div><div class="svc">hora de Chile</div></span></div>
       </div>
     </div>
 
@@ -189,7 +203,8 @@
       <div class="bh">Almacenamiento y servicios transversales</div>
       <div class="row">
         <div class="node data"><span class="ico i-data"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7l9-4 9 4-9 4-9-4zM3 7v10l9 4 9-4V7"/></svg></span><span><div class="nm">S3 — Documentos</div><div class="sv">actas, informes, certificados</div><div class="svc">privado · cifrado · versionado</div></span></div>
-        <div class="node sec"><span class="ico i-sec"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="10" width="16" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg></span><span><div class="nm">Secrets Manager · KMS</div><div class="sv">credenciales y cifrado</div></span></div>
+        <div class="node data"><span class="ico i-data"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7l9-4 9 4-9 4-9-4zM3 7v10l9 4 9-4V7"/></svg></span><span><div class="nm">S3 — Operaciones</div><div class="sv">cola de trabajos y paquetes de carga</div><div class="svc">se vacía a los 7 días</div></span></div>
+        <div class="node sec"><span class="ico i-sec"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="10" width="16" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg></span><span><div class="nm">Secrets Manager · KMS</div><div class="sv">clave maestra de la base y cifrado</div></span></div>
         <div class="node sec"><span class="ico i-sec"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12h4l3 8 4-16 3 8h4"/></svg></span><span><div class="nm">CloudWatch · CloudTrail</div><div class="sv">métricas, logs y auditoría</div></span></div>
         <div class="node sec"><span class="ico i-sec"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7l9 6 9-6"/></svg></span><span><div class="nm">Amazon SES</div><div class="sv">correos y notificaciones</div></span></div>
       </div>
@@ -205,35 +220,44 @@
     <div class="sec-h"><span class="n">1</span><h2>Flujo de una petición</h2></div>
     <div class="flow">
       <span class="step">Usuario</span><span class="arrow">→</span>
-      <span class="step">Route 53</span><span class="arrow">→</span>
-      <span class="step">CloudFront + WAF</span><span class="arrow">→</span>
-      <span class="step">S3 (SPA) / ALB</span><span class="arrow">→</span>
-      <span class="step">ECS Fargate (API)</span><span class="arrow">→</span>
-      <span class="step">RDS · Redis · S3</span>
+      <span class="step">CloudFront</span><span class="arrow">→</span>
+      <span class="step">S3 (SPA) / URL de Lambda</span><span class="arrow">→</span>
+      <span class="step">Lambda (API)</span><span class="arrow">→</span>
+      <span class="step">RDS · S3</span>
     </div>
-    <p style="font-size:12.5px;color:var(--muted);margin-top:10px">La identidad se valida con Cognito (token). Las tareas asíncronas (recordatorios de reuniones, alertas de vencimiento, cierre de actividades) las dispara EventBridge sobre Lambda, que notifica por SES.</p>
+    <p style="font-size:12.5px;color:var(--muted);margin-top:10px">El usuario se identifica con Cognito y envía su token en cada llamada. CloudFront firma la llamada a la función, que nadie más puede invocar. La API valida el token, abre la transacción indicando qué usuario opera y la base aplica la seguridad por fila.</p>
+    <div class="flow" style="margin-top:12px">
+      <span class="step">Lambda (API)</span><span class="arrow">→</span>
+      <span class="step">S3 operaciones/trabajos/</span><span class="arrow">→</span>
+      <span class="step">Lambda (trabajos)</span><span class="arrow">→</span>
+      <span class="step">SES · Cognito</span>
+    </div>
+    <p style="font-size:12.5px;color:var(--muted);margin-top:10px">La API no tiene internet. Para enviar un correo o crear un usuario deja un trabajo en S3; la función de trabajos lo ejecuta. Los documentos se suben y bajan directo entre el navegador y S3 con URL firmadas.</p>
   </section>
 
   <section>
     <div class="sec-h"><span class="n">2</span><h2>Decisiones clave</h2></div>
     <div class="grid2">
-      <div class="card"><h3>Alta disponibilidad</h3><ul>
-        <li>RDS <b>Multi-AZ</b> con réplica y failover automático.</li>
-        <li>ECS Fargate en ≥2 zonas con Auto Scaling.</li>
-        <li>ALB reparte y aísla instancias caídas.</li></ul></div>
+      <div class="card"><h3>Disponibilidad</h3><ul>
+        <li>Lambda corre en dos zonas sin configuración adicional.</li>
+        <li>Base single-AZ en el piloto, con respaldos diarios; <b>Multi-AZ</b> en producción.</li>
+        <li>Protección contra borrado en la base y en Cognito.</li></ul></div>
       <div class="card"><h3>Seguridad</h3><ul>
-        <li>Base de datos <b>sin salida a internet</b> (subred privada).</li>
-        <li>Cifrado en reposo (KMS) y en tránsito (TLS).</li>
-        <li>Secretos fuera del código; acceso por rol IAM.</li>
-        <li>Datos sensibles de salud con acceso reforzado.</li></ul></div>
+        <li>API y base <b>sin salida a internet</b>; S3 solo por un endpoint limitado a los buckets del sistema.</li>
+        <li>La API entra a la base con <b>tokens de IAM</b>: no hay clave de aplicación guardada.</li>
+        <li>Cifrado en reposo y en tránsito de punta a punta (TLS verificado hasta la base).</li>
+        <li>La función de trabajos no llega a la base; la API no puede enviar correos ni crear usuarios.</li>
+        <li>Datos de salud solo para la empresa y el comité (seguridad por fila).</li></ul></div>
       <div class="card"><h3>Escalabilidad</h3><ul>
-        <li>API sin estado: escala horizontal con la demanda.</li>
-        <li>Sesión en Redis → sin dependencia de instancia.</li>
+        <li>Lambda escala sola; la concurrencia se limita para proteger la base.</li>
+        <li>API sin estado: con tráfico sostenido, la misma imagen pasa a ECS Fargate con balanceador.</li>
         <li>CloudFront descarga el tráfico estático.</li></ul></div>
       <div class="card"><h3>Costos y operación</h3><ul>
-        <li>Fargate/Lambda: se paga por uso, sin servidores.</li>
+        <li>Piloto ≈ 28 – 38 USD/mes; la base es casi todo el costo.</li>
+        <li>Sin balanceador, NAT Gateway ni IP públicas permanentes.</li>
+        <li>Encendido programado de la base (días hábiles o fines de semana).</li>
         <li>Sin licencias Windows/SQL Server (stack Linux).</li>
-        <li>IaC (Terraform / CloudFormation) para reproducir.</li></ul></div>
+        <li>Toda la infraestructura en Terraform, con pruebas.</li></ul></div>
     </div>
   </section>
 
@@ -243,7 +267,7 @@
       <li><b>Una instalación para todos los clientes:</b> cada registro pertenece a una empresa (<code>empresa_id</code>) y PostgreSQL aplica <i>Row-Level Security</i>, así ninguna empresa ve datos de otra.</li>
       <li><b>Activos propios:</b> cuenta AWS, dominio (<code>app.paritario.cl</code>, ejemplo), correo SES con SPF/DKIM/DMARC del dominio propio, identidad en Cognito propia y repositorio de código del proveedor.</li>
       <li><b>SSO opcional:</b> una empresa cliente puede conectar su propio proveedor de identidad (Entra ID, Google) vía SAML/OIDC, sin que la plataforma dependa de él.</li>
-      <li><b>Reproducible:</b> toda la infraestructura en IaC (Terraform o CloudFormation), lo que permite moverla de región o de cuenta sin rehacerla.</li>
+      <li><b>Reproducible:</b> toda la infraestructura está en Terraform (<code>infra/</code>), lo que permite moverla de región o de cuenta sin rehacerla.</li>
     </ul></div>
   </section>
 
@@ -256,6 +280,20 @@
       <li><b>Integraciones:</b> listado de adherentes por SFTP (AWS Transfer Family) o API (API Gateway); intercambio con su programa de certificación por API. Las credenciales quedan en Secrets Manager.</li>
       <li><b>Instalación dedicada (opcional):</b> si un organismo, por ejemplo un servicio público, exige separación física o residencia en Chile, el mismo código de infraestructura (IaC) levanta una instalación exclusiva en otra cuenta o región, sin cambiar la aplicación.</li>
     </ul></div>
+  </section>
+
+  <section>
+    <div class="sec-h"><span class="n">5</span><h2>Evolución a producción</h2></div>
+    <p style="font-size:13px;color:var(--muted);margin:0 0 10px">El piloto prioriza costo bajo. Con más empresas, datos reales a escala o un organismo en marca blanca, se agregan estas piezas sin cambiar la aplicación:</p>
+    <div class="tbl"><table class="ev">
+      <tr><th>Pieza</th><th>Cuándo</th><th>Para qué</th></tr>
+      <tr><td>ECS Fargate + balanceador</td><td>Tráfico sostenido, procesos de más de 29 s o tiempo real</td><td>Costo predecible con carga constante y sin arranques en frío; misma imagen</td></tr>
+      <tr><td>RDS Multi-AZ</td><td>Primer cliente en producción</td><td>Conmutación automática si cae una zona</td></tr>
+      <tr><td>AWS WAF</td><td>Primer cliente en producción</td><td>Reglas gestionadas contra ataques comunes y límite de solicitudes</td></tr>
+      <tr><td>ElastiCache Redis</td><td>Cuando la caché o la sesión lo justifiquen</td><td>Descargar consultas repetidas de la base</td></tr>
+      <tr><td>NAT Gateway o endpoints privados</td><td>Si la API necesita llamar servicios externos directamente</td><td>Salida controlada a internet desde la red privada</td></tr>
+      <tr><td>Llaves KMS propias, registros de acceso y de flujo, Performance Insights</td><td>Producción</td><td>Auditoría, control de llaves y diagnóstico</td></tr>
+    </table></div>
   </section>
 
   <footer>Arquitectura de referencia · orientación de diseño · la región definitiva depende de la evaluación legal de residencia de datos (Ley 21.719).</footer>

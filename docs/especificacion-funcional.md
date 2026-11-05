@@ -145,10 +145,12 @@ Esta sección es orientación de diseño y debe validarse con asesoría legal.
 Arquitectura desacoplada sobre Linux, con servicios administrados y aislamiento de red por VPC.
 
 - **Front:** SPA (React o Angular) servida como sitio estático (S3 + CloudFront).
-- **API:** servicio REST (ASP.NET Core o Node) en contenedores (ECS Fargate), con escalado automático.
-- **Datos:** PostgreSQL administrado (RDS Multi-AZ); documentos (actas, informes) en S3 cifrado; caché/sesión en Redis (ElastiCache). Cada empresa cliente queda aislada en la base de datos con Row-Level Security (ver [`db/schema.sql`](../db/schema.sql)).
+- **API:** servicio REST (ASP.NET Core o Node) empaquetado como imagen de contenedor. Parte en **AWS Lambda** (con Lambda Web Adapter), que cobra solo por solicitud y no necesita balanceador; con tráfico sostenido, la misma imagen pasa a ECS Fargate detrás de un balanceador sin cambiar la aplicación. Las tareas que necesitan internet (correo, alta de usuarios) las hace una segunda función fuera de la red privada, que no tiene acceso a la base.
+- **Datos:** PostgreSQL administrado (RDS; Multi-AZ en producción), al que la API entra con tokens de IAM, sin claves guardadas; documentos (actas, informes) en S3 cifrado, subidos y bajados directo desde el navegador con URL firmadas; caché/sesión en Redis (ElastiCache) solo cuando la escala lo justifique. Cada empresa cliente queda aislada en la base de datos con Row-Level Security (ver [`db/schema.sql`](../db/schema.sql)).
 - **Identidad:** Cognito (o Entra ID) para autenticación, MFA y roles.
-- **Transversales:** Secrets Manager + KMS, CloudWatch/CloudTrail, Amazon SES, EventBridge + Lambda para tareas programadas.
+- **Transversales:** Secrets Manager + KMS, CloudWatch/CloudTrail, Amazon SES, EventBridge Scheduler para tareas programadas.
+
+La infraestructura del piloto está escrita en Terraform en [`infra/`](../infra/README.md), probada y lista para aplicar.
 
 **Residencia de datos (decisión crítica):** AWS aún no tiene región en Chile (anunciada para fines de 2026); hoy la más cercana es São Paulo, lo que implica una transferencia internacional bajo la Ley 21.719 y exige salvaguardas, o bien alojar los datos personales en Chile. El detalle está en el [diagrama de arquitectura](arquitectura-aws.html).
 
@@ -212,6 +214,8 @@ Estimación del costo recurrente de la infraestructura en AWS (región São Paul
 | Transferencia de datos | Salida de red | 10 – 30 |
 | **Total producción** | | **≈ 350 – 800** |
 
+La producción a escala usa contenedores en ECS Fargate con balanceador: con tráfico sostenido sale más barato y predecible que Lambda. El piloto parte en Lambda (ver abajo) y migra con la misma imagen cuando el uso lo justifique.
+
 - **Staging / pruebas:** un ambiente reducido suma ≈ 120 – 250 USD/mes, o se apaga fuera de horario para ahorrar.
 - **Palancas de ahorro:** instancias `t4g` (Graviton), Fargate Spot para tareas no críticas, un solo NAT Gateway y Savings Plans (1–3 años) reducen la factura un 20–40%.
 - **Ahorro estructural:** el stack Linux + PostgreSQL evita las licencias de Windows Server y SQL Server, que en modo License Included pueden duplicar el costo de la base de datos.
@@ -219,46 +223,41 @@ Estimación del costo recurrente de la infraestructura en AWS (región São Paul
 
 ### Escenario piloto: MVP con 10 empresas
 
-Un piloto de 10 empresas cuesta ≈ 90 – 170 USD/mes en AWS (São Paulo, single-AZ, sin Redis). Volumen supuesto: ~30–50 comités, ~400–600 integrantes, ~50–80 usuarios con acceso, ~30–50 actas y ~1.000–2.000 correos al mes.
+Un piloto de 10 empresas cuesta ≈ 28 – 38 USD/mes en AWS (São Paulo, single-AZ, sin Redis), con la API en Lambda. Volumen supuesto: ~30–50 comités, ~400–600 integrantes, ~50–80 usuarios con acceso, ~30–50 actas y ~1.000–2.000 correos al mes.
 
 | Servicio | Configuración piloto | USD/mes |
 | --- | --- | --- |
-| RDS PostgreSQL | db.t4g.micro/small, single-AZ, < 5 GB | 25 – 45 |
-| Application Load Balancer | costo base | 18 – 22 |
-| ECS Fargate | 1 tarea de 0,25–0,5 vCPU | 12 – 25 |
-| NAT Gateway | 1, o se evita en el piloto | 0 – 33 |
-| S3 + CloudFront | SPA y actas (pocos GB) | 3 – 8 |
+| RDS PostgreSQL | db.t4g.micro, single-AZ, 20 GB | 25 – 28 |
+| AWS Lambda | API y trabajos; 1 millón de solicitudes y 400.000 GB-s gratis al mes | 0 – 2 |
+| S3 + CloudFront | SPA y actas (pocos GB) | 0 – 3 |
 | Cognito | ~80 usuarios | 0 |
 | Amazon SES | ~1.000–2.000 correos | < 1 |
-| Secrets / KMS / CloudWatch | seguridad y logs | 8 – 15 |
-| Transferencia de datos | red | 3 – 8 |
-| **Total piloto (24/7)** | | **≈ 90 – 170** |
+| Secrets Manager / CloudWatch | clave maestra de la base, registros 30 días | 1 – 3 |
+| Transferencia de datos | red | 0 – 2 |
+| **Total piloto (24/7)** | | **≈ 28 – 38** |
 
-- El costo casi no escala con el número de empresas: RDS, ALB y NAT son un piso fijo de ~60–90 USD/mes, y el uso real de 10 empresas es mínimo.
+- **Sin balanceador, NAT Gateway ni IP públicas permanentes.** Son los cargos fijos que más pesan en un piloto (~40–60 USD/mes entre los tres). La API corre en Lambda, en una red privada sin salida a internet; llega a S3 por un endpoint gratuito.
+- **La base de datos es casi todo el costo.** El resto se cobra por uso y, con el volumen de 10 empresas, queda en los niveles gratuitos.
+- **Costo de la elección:** la primera solicitud después de un rato sin uso tarda 1–2 segundos más (arranque en frío), cada solicitud admite hasta 6 MB y 29 segundos, y las conexiones a la base se limitan con la concurrencia de Lambda. Para un piloto son aceptables.
 - Una cuenta AWS nueva tiene Free Tier por 12 meses, que cubre parte de RDS, S3 y transferencia.
 
-### Alternativa: encendido solo los fines de semana
+### Alternativa: encendido programado
 
-Si el piloto se usa solo los fines de semana, apagar todo de lunes a viernes baja el costo a ≈ 35 – 70 USD/mes. El sistema queda encendido ~48 horas por semana (~28% del mes) y lo que se cobra por hora baja en esa proporción.
+Como la API no cobra mientras no recibe solicitudes, el horario solo enciende y apaga la base de datos. La infraestructura lo trae configurado (`horario` en Terraform, con EventBridge Scheduler en hora de Chile).
 
-| Servicio | Qué se hace de lunes a viernes | USD/mes |
+| Horario | Base encendida | USD/mes |
 | --- | --- | --- |
-| RDS PostgreSQL | se detiene; el almacenamiento se sigue cobrando | 10 – 18 |
-| ECS Fargate | se baja a 0 tareas | 4 – 7 |
-| Application Load Balancer | se elimina y se recrea con IaC | 5 – 6 |
-| NAT Gateway | se evita | 0 |
-| S3 + CloudFront | cobro por uso, sin cambio | 3 – 8 |
-| Secrets / KMS / CloudWatch | cargo mensual fijo | 8 – 12 |
-| Transferencia de datos | por uso | 1 – 4 |
-| **Total fines de semana** | | **≈ 35 – 70** |
+| Siempre | 24/7 | ≈ 28 – 38 |
+| Días hábiles | lunes a viernes, 07:00 a 20:00 | ≈ 14 – 22 |
+| Fines de semana | sábado 07:00 a domingo 23:00 | ≈ 11 – 18 |
 
 Condiciones para que funcione:
 
-- **Automatización obligatoria:** el encendido y apagado se programa con EventBridge Scheduler + Lambda (o AWS Instance Scheduler), y la infraestructura se define con IaC (Terraform o CloudFormation) para recrear el balanceador sin intervención manual.
-- **Sin acceso entre semana:** los usuarios solo pueden entrar el fin de semana; hay que comunicarlo a las empresas del piloto.
-- **Correos y alertas:** las tareas programadas en Lambda pueden seguir corriendo entre semana (se cobran por uso), pero los enlaces del correo solo funcionan cuando el sistema está encendido.
-- **Tiempo de arranque:** RDS tarda ~10–15 minutos en iniciar; el encendido debe programarse antes del horario de uso.
-- **Límite de RDS:** AWS reinicia sola una base detenida tras 7 días seguidos; con apagado de 5 días no se alcanza ese límite.
+- **Lo que se sigue cobrando:** con la base detenida se paga su almacenamiento y respaldos; el resto es por uso.
+- **Sin acceso fuera de horario:** la aplicación responde con error cuando la base está apagada; hay que comunicarlo a las empresas del piloto.
+- **Correos y alertas:** los enlaces de los correos solo funcionan cuando el sistema está encendido.
+- **Tiempo de arranque:** RDS tarda ~10–15 minutos en iniciar; el encendido está programado antes del horario de uso.
+- **Límite de RDS:** AWS reinicia sola una base detenida tras 7 días seguidos; con los dos calendarios nunca pasa más de 6 días apagada.
 - **Datos intactos:** apagar no borra información; base de datos, actas y respaldos se conservan.
 
 ## 19. Comparación de nube (AWS / Azure / GCP)
@@ -275,7 +274,7 @@ La arquitectura es portable entre los tres proveedores (cada servicio tiene equi
 
 | Capa | AWS | Azure | Google Cloud |
 | --- | --- | --- | --- |
-| API en contenedores | ECS Fargate | Container Apps / AKS | Cloud Run / GKE |
+| API en contenedores | Lambda (piloto) / ECS Fargate | Container Apps / AKS | Cloud Run / GKE |
 | Base de datos | RDS PostgreSQL | Azure DB for PostgreSQL | Cloud SQL |
 | Hosting .NET en Windows (si se requiere) | EC2 Windows / Beanstalk | App Service (Windows) | Compute Engine |
 | Almacenamiento | S3 | Blob Storage | Cloud Storage |
