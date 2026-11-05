@@ -135,7 +135,9 @@
         <tr><td><b>Contacto</b></td><td>Email, teléfono</td><td>Convocatoria y notificaciones</td><td><span class="pill norm">Común</span></td><td>Mientras sea integrante</td></tr>
         <tr><td><b>Participación</b></td><td>Cargo, representación, asistencia</td><td>Gestión y actas del comité</td><td><span class="pill norm">Común</span></td><td>Conservación legal (actas)</td></tr>
         <tr><td><b>Salud / siniestros</b></td><td>Investigación de accidentes y enfermedades profesionales</td><td>Prevención y medidas correctivas</td><td><span class="pill sens">Sensible</span></td><td>Acceso reforzado · retención específica</td></tr>
-        <tr><td><b>Acceso al sistema</b></td><td>RUT de usuario, identificador de la cuenta, estado (invitada, activa, bloqueada), rol, bitácora. <b>Sin contraseñas:</b> las guarda el servicio de identidad, no Paritario</td><td>Seguridad y trazabilidad</td><td><span class="pill norm">Común</span></td><td>Cuenta: se bloquea, no se borra · bitácora según política</td></tr>
+        <tr><td><b>Acceso al sistema</b></td><td>RUT de usuario, identificador de la cuenta, estado (invitada, activa, bloqueada), rol, bitácora; si entra con el sistema de su cliente u organismo, el perfil y los contratos que ese sistema envía. <b>Sin contraseñas:</b> las guarda el servicio de identidad, no Paritario</td><td>Seguridad y trazabilidad</td><td><span class="pill norm">Común</span></td><td>Cuenta: se bloquea, no se borra · bitácora según política</td></tr>
+        <tr><td><b>Empresas y centros desde el cliente</b></td><td>RUT y razón social de la empresa, número de contrato, centros de trabajo y su dotación</td><td>Mantener empresas y centros al día</td><td><span class="pill norm">Común</span></td><td>Vigencia del contrato; las bajas se marcan, no se borran</td></tr>
+        <tr><td><b>Bitácora de cargas</b></td><td>Fecha, totales y errores de cada sincronización, sin datos personales</td><td>Trazabilidad de las cargas</td><td><span class="pill norm">Común</span></td><td>Según política</td></tr>
         <tr><td><b>Registros técnicos</b></td><td>Errores y eventos de la aplicación (sin datos personales)</td><td>Operación y diagnóstico</td><td><span class="pill norm">Común</span></td><td>30 días</td></tr>
       </tbody>
     </table></div>
@@ -193,9 +195,10 @@
         <tr><td><b>RDS PostgreSQL</b></td><td>Toda la información de los comités, incluidos datos de salud</td><td>São Paulo · red privada sin internet · cifrada · respaldos 7 días</td></tr>
         <tr><td><b>S3</b></td><td>Actas y documentos (pueden contener datos de salud)</td><td>São Paulo · privado · cifrado · versionado</td></tr>
         <tr><td><b>Lambda (API)</b></td><td>Procesa cada solicitud; no guarda datos</td><td>São Paulo · red privada sin internet</td></tr>
-        <tr><td><b>Cognito</b></td><td>RUT, correo, contraseña (la gestiona el servicio) y estado de MFA</td><td>São Paulo</td></tr>
-        <tr><td><b>Lambda (trabajos) y SES</b></td><td>Correos: destinatario y aviso, sin datos sensibles</td><td>São Paulo · sin acceso a la base</td></tr>
+        <tr><td><b>Cognito</b></td><td>RUT, correo, contraseña (la gestiona el servicio) y estado de MFA; perfil y contratos que envía el sistema del cliente</td><td>São Paulo</td></tr>
+        <tr><td><b>Lambda (trabajos) y SES</b></td><td>Correos: destinatario y aviso, sin datos sensibles. Consulta los servicios de empresas y centros del cliente</td><td>São Paulo · sin acceso a la base</td></tr>
         <tr><td><b>CloudFront</b></td><td>Tráfico cifrado en tránsito; solo guarda en caché la aplicación web, nunca respuestas con datos</td><td>Red global de AWS: atiende desde el punto más cercano al usuario</td></tr>
+        <tr><td><b>Secrets Manager</b></td><td>Credenciales de los servicios de clientes y organismos; clave maestra de la base</td><td>São Paulo · cifrado</td></tr>
         <tr><td><b>CloudWatch</b></td><td>Registros técnicos</td><td>São Paulo · 30 días</td></tr>
       </tbody>
     </table></div>
@@ -213,6 +216,8 @@
       <li><b>Vista del organismo, mínima necesaria.</b> Por defecto, el organismo ve indicadores agregados de sus empresas (cumplimiento, certificación). El detalle de personas, y sobre todo los datos de salud, solo se abre si hay una finalidad justificada y queda registrado en la bitácora.</li>
       <li><b>Separación entre organismos.</b> Ningún organismo ve datos de otro. Lo garantiza la base de datos, no solo la aplicación.</li>
       <li><b>Organismos públicos.</b> Un servicio público tiene reglas propias de tratamiento de datos y exigencias de ciberseguridad. Además contrata vía Ley de Compras Públicas, que puede exigir residencia de datos en Chile o una instalación dedicada.</li>
+      <li><b>Datos que entrega el cliente u organismo.</b> Al conectar su inicio de sesión y sus servicios, el cliente comunica a Paritario el RUT, el perfil y los contratos de sus usuarios, y el listado de empresas y centros. Paritario los usa solo para dar acceso y mantener empresas y centros; el contrato de encargo debe incluir estas comunicaciones.</li>
+      <li><b>Exactitud de los accesos.</b> Los accesos que entrega el sistema del cliente se recalculan en cada ingreso: un cambio de cargo o una desvinculación se refleja en el siguiente ingreso. Para quitar un acceso de inmediato, se bloquea la cuenta en Paritario, lo que también impide entrar por el sistema del cliente.</li>
       <li><b>Término del contrato.</b> El DPA debe definir la devolución de los datos a cada empresa o al organismo, y su eliminación en la plataforma.</li>
     </ul>
   </section>
@@ -225,7 +230,7 @@
     </div>
   </section>
 
-  <footer>Anexo v4 · producto independiente con marca blanca · Ley 21.719 / Ley 19.628 · orientación de diseño, no asesoría legal · validar con asesoría legal.</footer>
+  <footer>Anexo v5 · producto independiente con marca blanca · Ley 21.719 / Ley 19.628 · orientación de diseño, no asesoría legal · validar con asesoría legal.</footer>
 </div>
 
 <script>
@@ -246,6 +251,8 @@ const CHECKS=[
   ["Exigir MFA a los administradores de empresa y organismo","Hoy es opcional para todos los usuarios"],
   ["Revisar que los registros técnicos no contengan datos personales","Antes de cargar datos reales"],
   ["Aceptar el contrato de encargo de AWS e inscribirlo como subencargado","Servicios y región de la tabla de la sección 8"],
+  ["Incluir en el contrato con cada cliente u organismo los datos que entregan su SSO y sus servicios","RUT, perfil, contratos, empresas y centros"],
+  ["Acordar con cada cliente cómo avisa una desvinculación urgente","El acceso por su sistema se recalcula en el siguiente ingreso"],
 ];
 const esc=s=>String(s).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
 let state={};

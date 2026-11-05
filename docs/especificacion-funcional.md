@@ -42,9 +42,11 @@ El acceso se controla por rol y por ámbito (empresa y/o comité), de modo que n
 Permite registrar las empresas cliente y sus centros de trabajo, base sobre la que se constituyen los comités.
 
 - Registrar y mantener empresas cliente (RUT, razón social, código de actividad económica del SII, organismo administrador y plan contratado); la sección CIIU de ese código es el rubro y determina la plantilla de programa de trabajo propuesta.
+- Registrar el **contrato** de cada empresa: el número de adherente o de contrato con que su organismo la identifica, uno por empresa.
 - Administrar centros de trabajo con alias, dirección (región/comuna desde catálogo) y masa de trabajadores.
 - Marcar centros como vigentes o no vigentes, sin eliminarlos, para conservar el historial.
 - Buscar y filtrar centros por nombre, comuna o estado.
+- **Carga automática:** si el organismo o la empresa tiene un servicio de empresas o de centros de trabajo, Paritario los actualiza cada día (sección 20). Los centros sincronizados muestran su código y su origen; los agregados a mano no se tocan.
 
 ## 5. Comités e integrantes
 
@@ -103,6 +105,7 @@ Registra las auditorías y la certificación de cada comité, sea una evaluació
 Permite que las empresas gestionen sus propios accesos, con aprobación del administrador.
 
 - Iniciar sesión con RUT y contraseña, con segundo factor (MFA) opcional y, si la empresa lo pide, SSO con su propio proveedor de identidad. Las contraseñas las gestiona el servicio de identidad (Cognito): Paritario no guarda ninguna.
+- **Inicio de sesión del cliente u organismo, con rol:** su sistema entrega en cada ingreso el RUT, el perfil y los contratos del usuario. Cada perfil equivale a administrador, coordinador o auditor, y el usuario recibe ese rol en las empresas de sus contratos; los accesos que ya no vienen se quitan. Los asignados a mano no se tocan, y una cuenta bloqueada no entra aunque su sistema la autorice.
 - **Invitar usuarios:** el administrador ingresa nombre, RUT (validado con dígito verificador), correo, rol y ámbito. La persona recibe un correo con una clave temporal y define la suya en su primer ingreso.
 - Enviar una **solicitud de acceso** indicando rol y ámbito (empresa o comité).
 - El administrador **aprueba o rechaza** las solicitudes; al aprobar, se genera el acceso con su ámbito.
@@ -315,11 +318,16 @@ La misma plataforma se ofrece a organismos administradores sin plataforma propia
 
 **Integraciones con sus sistemas**
 
-| Integración | Para qué | Protocolo |
-| --- | --- | --- |
-| Inicio de sesión (SSO) | Que sus usuarios entren con la cuenta de su portal | SAML u OIDC |
-| Listado de adherentes | Incorporar y dar de baja empresas automáticamente | SFTP o API |
-| Certificación | Intercambiar resultados con su programa propio | API |
+Disponibles para organismos y, salvo el listado de empresas, también para una empresa cliente directa con sistemas propios.
+
+| Integración | Para qué | Quién | Protocolo |
+| --- | --- | --- | --- |
+| Inicio de sesión (SSO) con rol | Que sus usuarios entren con su cuenta y reciban su rol (administrador, coordinador o auditor) en las empresas de sus contratos | Organismo o empresa | SAML u OIDC |
+| Empresas o contratos | Incorporar, actualizar y dar de baja empresas cada día, por número de adherente o contrato | Organismo | API o SFTP |
+| Centros de trabajo | Mantener los centros de cada empresa o contrato | Organismo o empresa | API o SFTP |
+| Certificación | Intercambiar resultados con su programa propio | Organismo | API |
+
+Las cargas nunca borran: marcan bajas, y no aplican bajas si más del 10 % del listado trae errores. Cada carga queda registrada (nuevos, actualizados, bajas y errores) y se ve en "Marca e integraciones". Las credenciales de sus servicios se guardan en la bóveda de secretos, nunca en la base de datos.
 
 **Cómo se contrata**
 
@@ -336,7 +344,7 @@ La misma plataforma se ofrece a organismos administradores sin plataforma propia
 **Puesta en marcha**
 
 1. Piloto con 10–20 empresas del organismo.
-2. Integración de SSO y listado de adherentes.
+2. Integración del inicio de sesión con rol, del listado de empresas o contratos y de los centros de trabajo.
 3. Despliegue gradual al resto de sus empresas.
 
 **Infraestructura a escala:** un organismo con miles de empresas adherentes usa la configuración de producción completa (Multi-AZ, Redis, más capacidad). La estimación es del orden de 900 – 1.800 USD/mes, menos de 0,40 USD al mes por empresa activa. Es un valor de dimensionamiento que depende del número de usuarios activos y de documentos.

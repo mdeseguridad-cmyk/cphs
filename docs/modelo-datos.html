@@ -97,9 +97,9 @@
 
 <div class="page">
   <header class="hero">
-    <div class="eyebrow">Especificación técnica · v5.5</div>
+    <div class="eyebrow">Especificación técnica · v5.6</div>
     <h1>Modelo de datos · Sistema de Comités Paritarios</h1>
-    <p>Esquema relacional de <b>Paritario</b>, plataforma independiente para gestionar Comités Paritarios de Higiene y Seguridad. Funciona en dos modos: <b>venta directa</b> a empresas y <b>marca blanca</b> para organismos administradores (mutualidades o servicios públicos) que entregan la plataforma a sus empresas adherentes con su propia marca. <b>38 entidades</b> en cinco dominios, alineado al <b>DS 44/2024</b> y preparado para la <b>Ley 21.719</b> de protección de datos, con paridad funcional sobre plataformas de referencia del mercado (comisiones, programa de trabajo por rubro, material de apoyo, autoservicio de accesos). Tipos en notación PostgreSQL; aplican igual a SQL Server con equivalencias menores. Las entidades marcadas <span class="tag-new" style="margin:0">nuevo</span> son las sumadas en esta versión.</p>
+    <p>Esquema relacional de <b>Paritario</b>, plataforma independiente para gestionar Comités Paritarios de Higiene y Seguridad. Funciona en dos modos: <b>venta directa</b> a empresas y <b>marca blanca</b> para organismos administradores (mutualidades o servicios públicos) que entregan la plataforma a sus empresas adherentes con su propia marca. <b>40 entidades</b> en cinco dominios, alineado al <b>DS 44/2024</b> y preparado para la <b>Ley 21.719</b> de protección de datos, con paridad funcional sobre plataformas de referencia del mercado (comisiones, programa de trabajo por rubro, material de apoyo, autoservicio de accesos). Tipos en notación PostgreSQL; aplican igual a SQL Server con equivalencias menores. Las entidades marcadas <span class="tag-new" style="margin:0">nuevo</span> son las sumadas en esta versión.</p>
     <div class="toolbar">
       <div class="legend">
         <span class="lg"><span class="kbadge kpk">PK</span>llave primaria</span>
@@ -135,13 +135,15 @@
       <li><b>Roles de organismo.</b> <code>ADMIN_ORGANISMO</code> administra la marca, las integraciones y ve reportes consolidados de todas sus empresas; <code>ASESOR_ORGANISMO</code> (p. ej. experto en prevención) acompaña a las empresas que tiene asignadas.</li>
       <li><b>Historial, no sobrescritura.</b> Integrantes, reuniones, actividades y auditorías se versionan por fechas; la baja de un comité se marca con estado y fecha, nunca se borra, para mantener la trazabilidad legal. <code>log_acceso</code> registra los accesos a datos personales (Ley 21.719).</li>
       <li><b>Preparado para la Ley 21.719.</b> El dominio 05 agrega <code>solicitud_derecho_titular</code> (derechos ARCOP), <code>politica_retencion</code> (conservación vs. supresión), <code>registro_incidente</code> (notificación de brechas) y <code>encargado_tratamiento</code> (contratos de encargo y transferencia internacional). La base de licitud es el <b>cumplimiento de obligación legal</b> (Ley 16.744 y DS 44), no el consentimiento.</li>
+      <li><b>Integraciones con clientes y organismos (v5.6).</b> Un organismo o una empresa cliente puede conectar su inicio de sesión, su listado de empresas o contratos y sus centros de trabajo (<code>integracion</code>). El <b>contrato</b> (<code>empresa.codigo_contrato</code>) es el número de adherente o de contrato con que el organismo identifica a cada empresa, uno por empresa, y une el SSO y las cargas. El SSO entrega el RUT, un rol propio y los contratos del usuario; <code>rol_externo</code> lo traduce a administrador, coordinador o auditor, y en cada ingreso se concilian solo los accesos de origen <code>sso</code>.</li>
+      <li><b>Cargas acotadas y sin borrar (v5.6).</b> La aplicación no puede crear empresas ni ver las de otros clientes. Las funciones <code>importar_empresas</code>, <code>importar_centros</code> y <code>sincronizar_accesos_sso</code> hacen esas operaciones solo sobre las empresas del dueño de la integración, marcan bajas en vez de borrar, no aplican bajas si más del 10 % del listado trae errores y dejan cada carga en <code>sincronizacion</code>.</li>
       <li><b>Sin contraseñas en la base (v5.5).</b> La identidad la gestiona Cognito: <code>usuario</code> guarda el RUT (nombre de usuario) y el identificador de la cuenta (<code>cognito_sub</code>), nunca una clave. Un usuario invitado pasa a activo en su primer ingreso; uno bloqueado nunca se borra. La aplicación tampoco usa clave para conectarse a la base: entra con tokens de IAM.</li>
       <li><b>Documentos directo a S3 (v5.5).</b> El navegador sube y baja los archivos con URL firmadas, sin pasar por la API. <code>documento</code> nace <code>pendiente</code> y pasa a <code>disponible</code> cuando la API confirma el objeto, con su huella SHA-256, su tamaño y la versión del bucket versionado.</li>
       <li><b>Datos sensibles identificados.</b> <code>documento.contiene_datos_sensibles</code> marca los archivos con datos de salud (investigación de accidentes y enfermedades profesionales), que reciben acceso reforzado y una retención propia en <code>politica_retencion</code>.</li>
     </ul></div>
   </section>
 
-  <footer>Especificación v5.5 · producto independiente con marca blanca para organismos · datos y nombres de ejemplo · notación PostgreSQL 16 · paridad funcional de mercado, identidad propia.</footer>
+  <footer>Especificación v5.6 · producto independiente con marca blanca para organismos · datos y nombres de ejemplo · notación PostgreSQL 16 · paridad funcional de mercado, identidad propia.</footer>
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/mermaid/10.9.1/mermaid.min.js"></script>
@@ -165,12 +167,6 @@ const DOMAINS=[
      ["dominio","varchar(160)","UQ","dominio propio, p. ej. comites.organismo.cl"],
      ["correo_remitente","varchar(160)","","remitente de notificaciones"],
      ["estado","enum","","activo · en_implementacion · baja"],["fecha_contrato","date","",""]]},
-   {name:"integracion_organismo", desc:"Conexión con sistemas del organismo.", cols:[
-     ["id","bigint","PK",""],["organismo_id","bigint","FK:organismo",""],
-     ["tipo","enum","","sso · adherentes · certificacion · reportes"],
-     ["protocolo","varchar(30)","","SAML · OIDC · API REST · SFTP"],
-     ["configuracion","jsonb","","parámetros sin secretos (los secretos van en la bóveda)"],
-     ["estado","enum","","en_prueba · activa · inactiva"],["ultima_sincronizacion","timestamptz","",""]]},
    {name:"actividad_seccion", desc:"Secciones del CIIU4.CL 2012 (A–U): el rubro de la empresa.", cols:[
      ["codigo","char(1)","PK","A–U"],["nombre","varchar(200)","UQ","p. ej. CONSTRUCCIÓN"]]},
    {name:"actividad_economica", desc:"Códigos de actividad económica del SII (674, de 6 dígitos).", cols:[
@@ -182,13 +178,28 @@ const DOMAINS=[
      ["actividad_economica_codigo","char(6)","FK:actividad_economica","código SII principal; su sección define el rubro"],
      ["organismo_id","bigint","FK:organismo","organismo que la entrega; nulo si es cliente directo"],
      ["organismo_administrador_id","smallint","FK:organismo_administrador","organismo al que está adherida"],
+     ["codigo_contrato","varchar(40)","","número de adherente o contrato con que la conoce su organismo; único por organismo (v5.6)"],
      ["plan","varchar(40)","","plan contratado"],
      ["estado","enum","","activo · suspendido · baja"],["fecha_alta","date","",""],["created_at","timestamptz","",""]]},
    {name:"sucursal", desc:"Centro de trabajo donde se constituye un comité.", cols:[
      ["id","bigint","PK",""],["empresa_id","bigint","FK:empresa",""],
      ["alias","varchar(120)","","nombre corto de gestión"],["nombre","varchar(160)","",""],
      ["direccion_calle","varchar(160)","",""],["direccion_numero","varchar(20)","",""],["comuna_id","bigint","FK:comuna",""],
-     ["masa_trabajadores","int","","dotación del centro"],["estado","enum","","vigente · no_vigente"]]},
+     ["masa_trabajadores","int","","dotación del centro"],["estado","enum","","vigente · no_vigente"],
+     ["codigo_externo","varchar(40)","","código del centro en el sistema del cliente; único por empresa (v5.6)"]]},
+   {name:"integracion", desc:"Conexión con sistemas de un organismo o de una empresa cliente.", isNew:true, cols:[
+     ["id","bigint","PK",""],["organismo_id","bigint","FK:organismo","dueño, si es un organismo"],
+     ["empresa_id","bigint","FK:empresa","dueño, si es una empresa cliente (solo sso y centros)"],
+     ["tipo","enum","","sso · empresas · centros · certificacion · reportes"],
+     ["protocolo","varchar(30)","","SAML · OIDC · API REST · SFTP"],
+     ["configuracion","jsonb","","parámetros sin secretos (URL, proveedor de SSO)"],
+     ["secreto_ref","varchar(200)","","nombre del secreto en Secrets Manager; nunca el secreto"],
+     ["estado","enum","","en_prueba · activa · inactiva"],["ultima_sincronizacion","timestamptz","",""]]},
+   {name:"sincronizacion", desc:"Bitácora de cada carga de empresas o centros desde un cliente.", isNew:true, cols:[
+     ["id","bigint","PK",""],["integracion_id","bigint","FK:integracion",""],
+     ["inicio","timestamptz","",""],["fin","timestamptz","",""],["estado","enum","","correcta · con_errores · fallida"],
+     ["nuevos","int","",""],["actualizados","int","",""],["bajas","int","","marcadas, nunca borradas"],["errores","int","",""],
+     ["detalle","jsonb","","código externo y motivo de cada error, sin datos personales"],["archivo_key","varchar(300)","","archivo recibido en S3"]]},
    {name:"region", desc:"Catálogo — regiones de Chile.", cols:[
      ["id","smallint","PK",""],["nombre","varchar(60)","UQ",""],["orden","smallint","","norte→sur"]]},
    {name:"comuna", desc:"Catálogo — comunas.", cols:[
@@ -276,7 +287,7 @@ const DOMAINS=[
    {name:"codigo_sisesat", desc:"Códigos SISESAT (SUSESO): forma, agente, ubicación de la lesión, agente de enfermedad, CIE-10.", cols:[
      ["id","bigint","PK",""],["clasificacion","enum","","forma (Anexo II) · agente_material (III) · ubicacion_lesion (VI) · causa_externa_cie10 (I) · lesion_cie10 (V) · agente_enfermedad (IX) · enfermedad_cie10"],
      ["codigo","varchar(12)","","único por clasificación"],["descripcion","varchar(300)","",""],["codigo_padre","varchar(12)","","nivel superior (OIT o categoría CIE-10)"],["codigo_alterno","varchar(12)","","otra grafía oficial (Anexo VI: 121)"],["grupo","varchar(300)","","agrupación del anexo"],["terminos","text[]","","otras glosas del mismo código (Anexo V)"],["seleccionable","boolean","","false = agrupación que no se ingresa (Anexo IX)"],["observacion","text","","anomalías del anexo"],["vigente","boolean","",""]]},
-   {name:"equivalencia_cie10_oit", desc:"Anexo IV: forma y agente OIT sugeridos para cada causa externa CIE-10.", isNew:true, cols:[
+   {name:"equivalencia_cie10_oit", desc:"Anexo IV: forma y agente OIT sugeridos para cada causa externa CIE-10.", cols:[
      ["cie10_codigo","varchar(10)","PK","causa externa, p. ej. W015"],["formas_oit","varchar(10)[]","","formas OIT válidas en el Anexo II"],
      ["agentes_oit","varchar(10)[]","","agentes válidos en el Anexo III"],["texto_forma","varchar(60)","","valor original del anexo"],
      ["texto_agente","varchar(60)","","valor original del anexo"],["observacion","text","","anomalías del anexo en esta fila"]]},
@@ -307,11 +318,17 @@ const DOMAINS=[
      ["estado","enum","","invitado · activo · bloqueado; activo exige cognito_sub (v5.5)"],["mfa_habilitado","boolean","","copia informativa de Cognito"],["ultimo_acceso","timestamptz","",""],["created_at","timestamptz","",""]]},
    {name:"rol", desc:"Rol funcional del sistema.", cols:[
      ["id","smallint","PK",""],["codigo","varchar(20)","UQ","ADMIN_ORGANISMO · ASESOR_ORGANISMO · ADMIN_EMPRESA · COORDINADOR · AUDITOR"],["nombre","varchar(80)","",""],["descripcion","varchar(200)","",""]]},
+   {name:"rol_externo", desc:"Rol que envía el SSO de un cliente → rol de empresa de Paritario.", isNew:true, cols:[
+     ["id","bigint","PK",""],["integracion_id","bigint","FK:integracion","integración de tipo sso"],
+     ["valor","varchar(100)","","código del rol en el sistema del cliente"],
+     ["rol_id","smallint","FK:rol","solo administrador, coordinador o auditor de empresa"]]},
    {name:"usuario_rol", desc:"Asignación de rol CON ámbito — clave del control de acceso.", cols:[
      ["id","bigint","PK",""],["usuario_id","bigint","FK:usuario",""],["rol_id","smallint","FK:rol",""],
      ["organismo_id","bigint","FK:organismo","ámbito: todas las empresas del organismo"],
      ["empresa_id","bigint","FK:empresa","ámbito: una empresa (nulo en roles de organismo)"],["comite_id","bigint","FK:comite","ámbito opcional (Coordinador)"],
-     ["vigente","boolean","",""],["created_at","timestamptz","",""]]},
+     ["vigente","boolean","",""],
+     ["origen","enum","","manual · solicitud · sso; el SSO solo toca los suyos (v5.6)"],
+     ["integracion_id","bigint","FK:integracion","SSO que entregó el acceso (v5.6)"],["created_at","timestamptz","",""]]},
    {name:"solicitud_acceso", desc:"Autoservicio: registro de usuario pendiente de aprobación.", cols:[
      ["id","bigint","PK",""],["rut","varchar(12)","",""],["nombre","varchar(160)","",""],["email","varchar(160)","",""],
      ["empresa_id","bigint","FK:empresa",""],["rol_solicitado_id","smallint","FK:rol",""],["comite_id","bigint","FK:comite","ámbito pedido"],
@@ -383,7 +400,12 @@ const ER=`erDiagram
   ORGANISMO_ADMINISTRADOR |o--o{ EMPRESA : adhiere
   ORGANISMO_ADMINISTRADOR |o--o| ORGANISMO : es
   ORGANISMO |o--o{ EMPRESA : entrega_a
-  ORGANISMO ||--o{ INTEGRACION_ORGANISMO : configura
+  ORGANISMO |o--o{ INTEGRACION : configura
+  EMPRESA |o--o{ INTEGRACION : configura
+  INTEGRACION ||--o{ SINCRONIZACION : registra
+  INTEGRACION ||--o{ ROL_EXTERNO : traduce
+  ROL ||--o{ ROL_EXTERNO : equivale
+  INTEGRACION |o--o{ USUARIO_ROL : entrega
   ORGANISMO |o--o{ PROGRAMA_PLANTILLA : aporta
   ORGANISMO |o--o{ MATERIAL_APOYO : aporta
   ORGANISMO |o--o{ NIVEL_CERTIFICACION : define

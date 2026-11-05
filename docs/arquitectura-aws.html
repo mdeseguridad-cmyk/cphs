@@ -156,7 +156,7 @@
       <div class="bh">Front estático e identidad</div>
       <div class="row">
         <div class="node edge"><span class="ico i-edge"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7l9-4 9 4-9 4-9-4zM3 7v10l9 4 9-4V7"/></svg></span><span><div class="nm">S3 — SPA</div><div class="sv">React / Angular estático</div><div class="svc">sitio distribuido por CloudFront</div></span></div>
-        <div class="node sec"><span class="ico i-sec"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="10" width="16" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg></span><span><div class="nm">Cognito</div><div class="sv">Identidad, MFA, roles</div><div class="svc">SSO opcional por cliente</div></span></div>
+        <div class="node sec"><span class="ico i-sec"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="10" width="16" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg></span><span><div class="nm">Cognito</div><div class="sv">Identidad, MFA, roles</div><div class="svc">federa el SSO del cliente (SAML/OIDC)</div></span></div>
       </div>
     </div>
     <div class="flowdown">↓</div>
@@ -191,8 +191,8 @@
     <div class="outside">
       <div class="sh">Fuera de la VPC — tareas que necesitan internet</div>
       <div class="row">
-        <div class="node sec"><span class="ico i-sec"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2L3 14h7l-1 8 10-12h-7l1-8z"/></svg></span><span><div class="nm">Lambda — trabajos</div><div class="sv">correos (SES) y usuarios (Cognito)</div><div class="svc">la invoca S3; no llega a la base</div></span></div>
-        <div class="node sec"><span class="ico i-sec"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></span><span><div class="nm">EventBridge Scheduler</div><div class="sv">encendido de la base · tareas programadas</div><div class="svc">hora de Chile</div></span></div>
+        <div class="node sec"><span class="ico i-sec"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2L3 14h7l-1 8 10-12h-7l1-8z"/></svg></span><span><div class="nm">Lambda — trabajos</div><div class="sv">correos, usuarios y servicios de clientes</div><div class="svc">la invoca S3; no llega a la base</div></span></div>
+        <div class="node sec"><span class="ico i-sec"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></span><span><div class="nm">EventBridge Scheduler</div><div class="sv">encendido de la base · sincronización diaria</div><div class="svc">hora de Chile</div></span></div>
       </div>
     </div>
 
@@ -233,6 +233,15 @@
       <span class="step">SES · Cognito</span>
     </div>
     <p style="font-size:12.5px;color:var(--muted);margin-top:10px">La API no tiene internet. Para enviar un correo o crear un usuario deja un trabajo en S3; la función de trabajos lo ejecuta. Los documentos se suben y bajan directo entre el navegador y S3 con URL firmadas.</p>
+    <div class="flow" style="margin-top:12px">
+      <span class="step">Scheduler 07:30</span><span class="arrow">→</span>
+      <span class="step">Lambda (API)</span><span class="arrow">→</span>
+      <span class="step">Lambda (trabajos)</span><span class="arrow">→</span>
+      <span class="step">Servicio del cliente</span><span class="arrow">→</span>
+      <span class="step">S3 importaciones/</span><span class="arrow">→</span>
+      <span class="step">Lambda (API) → RDS</span>
+    </div>
+    <p style="font-size:12.5px;color:var(--muted);margin-top:10px">Sincronización diaria de empresas (o contratos) y centros de trabajo desde los servicios del organismo o de la empresa cliente. La función de trabajos usa las credenciales del cliente guardadas en Secrets Manager; la API importa con funciones de la base que solo tocan las empresas de esa integración y marcan bajas sin borrar. Si el usuario entra con el SSO de su cliente, Cognito recibe su RUT, perfil y contratos, y la API concilia sus accesos en cada ingreso.</p>
   </section>
 
   <section>
@@ -276,8 +285,8 @@
     <div class="card"><ul>
       <li><b>Dominio del organismo:</b> el organismo apunta un subdominio suyo (p. ej. <code>comites.organismo.cl</code>) a CloudFront con un registro CNAME; AWS Certificate Manager emite su certificado sin costo. La aplicación reconoce el dominio de entrada y carga la marca de ese organismo (nombre, logo, colores).</li>
       <li><b>Correos con su remitente:</b> SES verifica el dominio de envío del organismo (SPF, DKIM y DMARC), así las notificaciones salen a nombre del organismo.</li>
-      <li><b>Inicio de sesión con su portal:</b> Cognito federa el proveedor de identidad del organismo (SAML u OIDC), para que sus usuarios entren con la misma cuenta que ya usan.</li>
-      <li><b>Integraciones:</b> listado de adherentes por SFTP (AWS Transfer Family) o API (API Gateway); intercambio con su programa de certificación por API. Las credenciales quedan en Secrets Manager.</li>
+      <li><b>Inicio de sesión con su portal, con rol:</b> Cognito federa el proveedor de identidad del organismo o de la empresa cliente (SAML u OIDC). Su sistema envía el RUT, el perfil y los contratos del usuario; cada perfil equivale a administrador, coordinador o auditor, y el usuario recibe ese rol en las empresas de sus contratos.</li>
+      <li><b>Empresas y centros desde sus sistemas:</b> cada día se consulta su servicio de empresas o contratos y de centros de trabajo (API o SFTP); cada carga queda registrada con nuevos, actualizados, bajas y errores. El contrato (número de adherente) une a cada empresa con su organismo. Las credenciales quedan en Secrets Manager.</li>
       <li><b>Instalación dedicada (opcional):</b> si un organismo, por ejemplo un servicio público, exige separación física o residencia en Chile, el mismo código de infraestructura (IaC) levanta una instalación exclusiva en otra cuenta o región, sin cambiar la aplicación.</li>
     </ul></div>
   </section>

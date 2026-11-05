@@ -296,14 +296,14 @@ const ADH = "Constructora Andes del Sur S.A.";
 // Organismo de ejemplo que contrata la plataforma en marca blanca (datos ficticios)
 const ORG = {nombre:"Mutualidad Ejemplo", marca:"Comités en Línea", dominio:"comites.mutualidad-ejemplo.cl", color:"#2563eb", remitente:"notificaciones@mutualidad-ejemplo.cl"};
 const EMPRESAS = [
-  ["Constructora Andes del Sur S.A.","Construcción",6,88,"oro","activa"],
-  ["Agrícola Valle Central Ltda.","Agricultura",3,92,"plata","activa"],
-  ["Transportes Ruta Norte SpA","Transporte",2,71,null,"activa"],
-  ["Clínica Costa Azul S.A.","Salud",4,96,"oro","activa"],
-  ["Retail Sur Ltda.","Comercio",5,64,"bronce","activa"],
-  ["Pesquera Bahía Austral S.A.","Pesca",2,79,null,"activa"],
-  ["Servicios Mineros Altiplano SpA","Minería",3,85,"plata","activa"],
-  ["Educa Futuro (sostenedora)","Educación",1,0,null,"en implementación"],
+  ["Constructora Andes del Sur S.A.","Construcción",6,88,"oro","activa","ADH-10231"],
+  ["Agrícola Valle Central Ltda.","Agricultura",3,92,"plata","activa","ADH-10377"],
+  ["Transportes Ruta Norte SpA","Transporte",2,71,null,"activa","ADH-10412"],
+  ["Clínica Costa Azul S.A.","Salud",4,96,"oro","activa","ADH-10588"],
+  ["Retail Sur Ltda.","Comercio",5,64,"bronce","activa","ADH-10640"],
+  ["Pesquera Bahía Austral S.A.","Pesca",2,79,null,"activa","ADH-10719"],
+  ["Servicios Mineros Altiplano SpA","Minería",3,85,"plata","activa","ADH-10802"],
+  ["Educa Futuro (sostenedora)","Educación",1,0,null,"en implementación","ADH-10988"],
 ];
 const comites = [
   {id:1, name:"CPHS Casa Matriz Santiago", suc:"Casa Matriz", reg:"Metropolitana", com:"Santiago", estado:"activo",
@@ -697,19 +697,29 @@ function vEmpresas(){
       <div class="kpi"><div class="lbl"><span class="dot" style="background:#caa33a"></span>Con certificación</div><div class="v num">${cert}/${EMPRESAS.length}</div><div class="sub">programa del organismo</div></div>
     </div>
     <div class="card"><div class="tablewrap"><table>
-      <thead><tr><th>Empresa</th><th>Rubro</th><th>Comités</th><th>Cumplimiento</th><th>Certificación</th><th>Estado</th></tr></thead>
+      <thead><tr><th>Empresa</th><th>Contrato</th><th>Rubro</th><th>Comités</th><th>Cumplimiento</th><th>Certificación</th><th>Estado</th></tr></thead>
       <tbody>${EMPRESAS.map(e=>{const ct=e[4]?CERT[e[4]]:null;const impl=e[5]!=="activa";
-        return `<tr><td class="cname">${esc(e[0])}</td><td style="color:var(--muted)">${esc(e[1])}</td><td class="num">${e[2]}</td>
+        return `<tr><td class="cname">${esc(e[0])}</td><td class="mono" style="color:var(--muted);white-space:nowrap">${esc(e[6])}</td><td style="color:var(--muted)">${esc(e[1])}</td><td class="num">${e[2]}</td>
         <td>${impl?'<span style="color:var(--faint)">—</span>':`<span class="num" style="font-weight:700;color:${col(e[3])}">${e[3]}%</span>`}</td>
         <td>${ct?`<span class="chip ${ct[1]}">${ct[0]}</span>`:'<span class="chip mut">—</span>'}</td>
         <td><span class="chip ${impl?"warn":"ok"}">${impl?"En implementación":"Activa"}</span></td></tr>`;}).join("")}</tbody></table></div></div>
-    <p class="segtip" style="margin-top:12px">El organismo ve indicadores de todas sus empresas, pero no puede ver datos de empresas de otros organismos.</p>`;
+    <p class="segtip" style="margin-top:12px">El organismo ve indicadores de todas sus empresas, pero no puede ver datos de empresas de otros organismos. El listado y los contratos se actualizan cada día desde el sistema del organismo (ver Marca e integraciones).</p>`;
 }
 
+const INTEG=[
+  ["Inicio de sesión (SSO)","SAML 2.0 · en cada ingreso","ok","Activa","Entrega RUT, perfil y contratos del usuario · 214 ingresos este mes"],
+  ["Empresas o contratos","API REST · cada día 07:30","ok","Activa","Última carga hoy 07:31: 8 contratos, sin cambios"],
+  ["Centros de trabajo","API REST · cada día 07:30","warn","Con errores","Última carga hoy 07:32: 1 centro rechazado"],
+  ["Programa de certificación","API REST","mut","Pendiente","Sin configurar"]];
+const SINC=[
+  ["hoy 07:32","Centros","con_errores",0,3,0,1,"Centro CT-0412 (contrato ADH-10988): comuna desconocida"],
+  ["hoy 07:31","Empresas","correcta",0,0,0,0,""],
+  ["ayer 07:32","Centros","correcta",2,1,0,0,""],
+  ["ayer 07:31","Empresas","correcta",1,1,0,0,""],
+  ["3 nov 07:31","Empresas","correcta",0,0,1,0,""]];
+const EST_S={correcta:["Correcta","ok"],con_errores:["Con errores","warn"],fallida:["Fallida","crit"]};
+const ROLEXT=[["ADM_PREV","Administrador"],["EXP_PREV","Coordinador"],["AUD_INT","Auditor"],["CONSULTA",null]];
 function vMarca(){
-  const integ=[["Inicio de sesión con el portal del organismo (SSO)","SAML 2.0","ok","Activa"],
-    ["Listado de empresas adherentes","SFTP diario","warn","En prueba"],
-    ["Programa de certificación del organismo","API REST","mut","Pendiente"]];
   wrap.innerHTML=`<div class="ph"><div><h1>Marca e integraciones</h1><p>Configuración de marca blanca de ${esc(ORG.nombre)} · datos de ejemplo</p></div></div>
     <div class="grid2">
       <div class="card"><div class="card-h"><h3>Marca</h3></div><div class="card-b">
@@ -720,9 +730,19 @@ function vMarca(){
           <span style="display:flex;align-items:center;gap:8px">Color principal <span style="width:18px;height:18px;border-radius:5px;background:${ORG.color};display:inline-block"></span><b class="mono">${esc(ORG.color)}</b></span>
         </div></div></div>
       <div class="card"><div class="card-h"><h3>Integraciones</h3></div><div class="card-b">
-        ${integ.map(i=>`<div class="alert"><span style="flex:1;min-width:0"><div class="ti">${esc(i[0])}</div><div class="de">${esc(i[1])}</div></span><span class="chip ${i[2]}">${i[3]}</span></div>`).join("")}
+        ${INTEG.map(i=>`<div class="alert"><span style="flex:1;min-width:0"><div class="ti">${esc(i[0])}</div><div class="de">${esc(i[1])}</div><div class="de" style="margin-top:2px">${esc(i[4])}</div></span><span class="chip ${i[2]}">${i[3]}</span></div>`).join("")}
       </div></div>
-    </div>`;
+    </div>
+    <div class="card" style="margin-top:14px"><div class="card-h"><h3>Sincronizaciones recientes</h3></div><div class="tablewrap"><table>
+      <thead><tr><th>Fecha</th><th>Servicio</th><th>Resultado</th><th>Nuevos</th><th>Actualizados</th><th>Bajas</th><th>Errores</th></tr></thead>
+      <tbody>${SINC.map(r=>{const e=EST_S[r[2]];return `<tr><td class="csub" style="white-space:nowrap">${esc(r[0])}</td><td>${esc(r[1])}</td>
+        <td><span class="chip ${e[1]}">${e[0]}</span>${r[7]?`<div class="csub" style="margin-top:4px">${esc(r[7])}</div>`:""}</td>
+        <td class="num">${r[3]}</td><td class="num">${r[4]}</td><td class="num">${r[5]}</td><td class="num">${r[6]}</td></tr>`;}).join("")}</tbody></table></div></div>
+    <p class="segtip" style="margin-top:12px">Nada se borra: las empresas y centros que dejan de venir quedan de baja. Si más del 10 % de un listado trae errores, no se aplican bajas.</p>
+    <div class="card" style="margin-top:14px"><div class="card-h"><h3>Equivalencia de perfiles del SSO</h3></div><div class="tablewrap"><table>
+      <thead><tr><th>Perfil en su sistema</th><th>Rol en ${esc(ORG.marca)}</th></tr></thead>
+      <tbody>${ROLEXT.map(r=>`<tr><td class="mono">${esc(r[0])}</td><td>${r[1]?esc(r[1]):'<span class="chip mut">Sin acceso</span>'}</td></tr>`).join("")}</tbody></table></div></div>
+    <p class="segtip" style="margin-top:12px">En cada ingreso, el SSO entrega el perfil y los contratos del usuario: se crean los accesos que corresponden y se quitan los que ya no vienen. Los accesos asignados a mano no se tocan.</p>`;
 }
 
 /* ---------- usuarios ---------- */
@@ -733,6 +753,7 @@ const USERS={
   empresa:[
     {n:"María José Soto",rut:"12.345.678-5",rol:"Administrador",amb:"Toda la empresa",est:"activo",mfa:true,ult:"hoy, 09:12"},
     {n:"Jorge Valdés",rut:"9.876.543-3",rol:"Coordinador de comité",amb:"CPHS Planta Antofagasta",est:"activo",mfa:false,ult:"ayer"},
+    {n:"Ricardo Muñoz",rut:"13.131.313-6",rol:"Coordinador de comité",amb:"Toda la empresa",est:"activo",mfa:null,ult:"hoy, 08:05",sso:true},
     {n:"Andrea Pizarro",rut:"16.432.110-k",rol:"Auditor",amb:"Toda la empresa",est:"invitado",mfa:false,ult:null,env:"hace 2 días"},
     {n:"Luis Contreras",rut:"11.222.333-9",rol:"Coordinador de comité",amb:"CPHS Sucursal Valparaíso",est:"bloqueado",mfa:true,ult:"hace 4 meses"},
   ],
@@ -763,16 +784,16 @@ function vUsuarios(){
       <div class="addrow" style="justify-content:flex-end"><button class="btn ghost sm" id="uCancel">Cancelar</button><button class="btn sm" id="uSend">Enviar invitación</button></div>
     </div></div>
     <div class="card"><div class="tablewrap"><table>
-      <thead><tr><th>Persona</th><th>RUT</th><th>Rol</th><th>Ámbito</th><th>Estado</th><th>MFA</th><th>Último ingreso</th><th></th></tr></thead>
+      <thead><tr><th>Persona</th><th>RUT</th><th>Rol</th><th>Ámbito</th><th>Origen</th><th>Estado</th><th>MFA</th><th>Último ingreso</th><th></th></tr></thead>
       <tbody id="urows"></tbody></table></div></div>
-    <p class="segtip" style="margin-top:12px">Bloquear una cuenta cierra sus sesiones abiertas. Las cuentas nunca se borran: el historial de actas y auditorías conserva quién hizo cada cosa.</p>`;
+    <p class="segtip" style="margin-top:12px">Los accesos de origen SSO los entrega el sistema del organismo en cada ingreso; su contraseña y MFA se gestionan allá. Bloquear una cuenta cierra sus sesiones abiertas y también impide el ingreso por SSO. Las cuentas nunca se borran: el historial de actas y auditorías conserva quién hizo cada cosa.</p>`;
   const act=u=>u.est==="invitado"?`<button class="btn ghost sm" data-ure="1">Reenviar invitación</button>`
     :u.est==="activo"?`<button class="btn ghost sm" data-ublk="1">Bloquear</button>`
     :u.est==="bloqueado"?`<button class="btn ghost sm" data-udes="1">Desbloquear</button>`:"";
   const draw=()=>{$("#urows").innerHTML=list.map((u,i)=>{const e=EST_U[u.est];
     return `<tr data-ui="${i}"><td class="cname">${esc(u.n)}</td><td class="num mono" style="color:var(--muted);white-space:nowrap">${esc(u.rut)}</td><td>${esc(u.rol)}</td>
-      <td style="color:var(--muted)">${esc(u.amb)}</td><td><span class="chip ${e[1]}">${e[0]}</span>${u.est==="invitado"&&u.env?`<div class="csub" style="margin-top:3px">enviada ${esc(u.env)}</div>`:""}</td>
-      <td>${u.est==="invitado"||u.est==="enviando"?'<span style="color:var(--faint)">—</span>':u.mfa?'<span class="chip ok">Activa</span>':'<span class="chip mut">No</span>'}</td>
+      <td style="color:var(--muted)">${esc(u.amb)}</td><td>${u.sso?'<span class="chip ok">SSO</span><div class="csub" style="margin-top:3px">lo entrega su sistema</div>':'<span class="chip mut">Manual</span>'}</td><td><span class="chip ${e[1]}">${e[0]}</span>${u.est==="invitado"&&u.env?`<div class="csub" style="margin-top:3px">enviada ${esc(u.env)}</div>`:""}</td>
+      <td>${u.est==="invitado"||u.est==="enviando"||u.mfa===null?'<span style="color:var(--faint)">—</span>':u.mfa?'<span class="chip ok">Activa</span>':'<span class="chip mut">No</span>'}</td>
       <td class="csub">${u.ult?esc(u.ult):"Aún no ingresa"}</td><td style="white-space:nowrap;text-align:right">${act(u)}</td></tr>`;}).join("");};
   const enviar=u=>{u.est="enviando";draw();setTimeout(()=>{u.est="invitado";u.env="ahora";if($("#urows"))draw();},1400);};
   draw();
@@ -794,6 +815,28 @@ function vUsuarios(){
     else if(e.target.closest("[data-udes]")){u.est="activo";draw();}};
 }
 
+const CENTROS=[
+  ["Casa Matriz","CT-0101","Santiago",180,"vigente","sso"],
+  ["Planta Norte","CT-0102","Antofagasta",420,"vigente","sso"],
+  ["Agencia Biobío","CT-0103","Concepción",95,"vigente","sso"],
+  ["Sucursal Costa","CT-0104","Valparaíso",130,"vigente","sso"],
+  ["Policlínico","CT-0105","Sierra Gorda",60,"vigente","sso"],
+  ["Obra PA-13","CT-0107","Padre Hurtado",0,"no_vigente","sso"],
+  ["Bodega temporal Quilicura",null,"Quilicura",12,"vigente","manual"]];
+function vCentros(){
+  wrap.innerHTML=`<div class="ph"><div><h1>Centros de trabajo</h1><p>Centros de la empresa, con su dotación · datos de ejemplo</p></div>
+      <button class="btn ghost"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>Agregar centro</button></div>
+    <div class="notice info"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4v6h6M20 20v-6h-6"/><path d="M20 10a8 8 0 0 0-14-4L4 10M4 14a8 8 0 0 0 14 4l2-4"/></svg>
+      <span>Los centros con código se actualizan cada día desde el sistema de ${esc(ORG.nombre)} (contrato <b class="mono">ADH-10231</b>). Última carga: hoy 07:32. Los que dejan de venir quedan no vigentes; los agregados aquí no se tocan.</span></div>
+    <div class="card"><div class="tablewrap"><table>
+      <thead><tr><th>Centro</th><th>Código</th><th>Comuna</th><th>Trabajadores</th><th>Comités</th><th>Origen</th><th>Estado</th></tr></thead>
+      <tbody>${CENTROS.map(c=>{const n=comites.filter(x=>x.suc===c[0]).length;
+        return `<tr><td class="cname">${esc(c[0])}</td><td class="mono" style="color:var(--muted)">${c[1]?esc(c[1]):"—"}</td><td>${esc(c[2])}</td>
+        <td class="num">${c[3]}</td><td class="num">${n}</td>
+        <td>${c[5]==="sso"?'<span class="chip ok">Sincronizado</span>':'<span class="chip mut">Manual</span>'}</td>
+        <td><span class="chip ${c[4]==="vigente"?"ok":"mut"}">${c[4]==="vigente"?"Vigente":"No vigente"}</span></td></tr>`;}).join("")}</tbody></table></div></div>`;
+}
+
 function vSimple(title,sub,icon){
   wrap.innerHTML=`<div class="ph"><div><h1>${title}</h1><p>${sub}</p></div></div>
     <div class="card"><div class="card-b"><div class="empty">
@@ -813,7 +856,7 @@ function go(view,arg){
   ({dashboard:vDashboard,comites:vComites,accesos:vAccesos,empresas:vEmpresas,marca:vMarca,
     reuniones:()=>vSimple("Reuniones","Calendario y actas de todas las reuniones",'<rect x="3" y="4.5" width="18" height="17" rx="2.5"/><path d="M3 9h18M8 2.5v4M16 2.5v4"/>'),
     cert:()=>vSimple("Certificación","Auditorías y niveles de certificación",'<circle cx="12" cy="9" r="5.5"/><path d="M8.5 13.5L7 22l5-2.5L17 22l-1.5-8.5"/>'),
-    centros:()=>vSimple("Centros de trabajo","Centros de trabajo de la empresa, con alias y dotación",'<path d="M3 21V7l9-4 9 4v14"/><path d="M9 21v-6h6v6"/>'),
+    centros:vCentros,
     usuarios:vUsuarios,
   }[view]||vDashboard)();
   window.scrollTo(0,0);
