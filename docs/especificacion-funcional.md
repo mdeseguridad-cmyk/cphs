@@ -102,10 +102,11 @@ Registra las auditorías y la certificación de cada comité, sea una evaluació
 
 Permite que las empresas gestionen sus propios accesos, con aprobación del administrador.
 
-- Crear cuenta e iniciar sesión con RUT (y, si la empresa lo pide, SSO con su propio proveedor de identidad) y segundo factor (MFA).
+- Iniciar sesión con RUT y contraseña, con segundo factor (MFA) opcional y, si la empresa lo pide, SSO con su propio proveedor de identidad. Las contraseñas las gestiona el servicio de identidad (Cognito): Paritario no guarda ninguna.
+- **Invitar usuarios:** el administrador ingresa nombre, RUT (validado con dígito verificador), correo, rol y ámbito. La persona recibe un correo con una clave temporal y define la suya en su primer ingreso.
 - Enviar una **solicitud de acceso** indicando rol y ámbito (empresa o comité).
 - El administrador **aprueba o rechaza** las solicitudes; al aprobar, se genera el acceso con su ámbito.
-- Gestionar usuarios y roles vigentes; revocar accesos.
+- Gestionar usuarios y roles vigentes. Cada cuenta está **invitada** (aún no ingresa), **activa** o **bloqueada**; se puede reenviar la invitación, bloquear y desbloquear. Bloquear cierra las sesiones abiertas. Las cuentas nunca se borran, para conservar quién hizo cada cosa.
 - Toda operación sobre datos personales queda en la bitácora de acceso.
 
 ## 11. Panel, reportes y notificaciones
@@ -115,20 +116,21 @@ Entrega la visión consolidada y las notificaciones que mantienen activo el cump
 - **Panel** con indicadores: comités activos, cumplimiento de reuniones, certificaciones y alertas abiertas.
 - **Alertas accionables**: reuniones no realizadas, vigencias por vencer, comités sin certificación.
 - **Reportería**: cumplimiento por región o centro, estado de comités, actividades del programa, con exportación.
-- **Notificaciones por correo (Amazon SES)**: convocatorias y recordatorios de reuniones, alertas de vencimiento, avisos del flujo de accesos y recuperación de contraseña. Los correos enlazan al sistema y no incluyen datos sensibles en su cuerpo.
+- **Notificaciones por correo (Amazon SES)**: convocatorias y recordatorios de reuniones, alertas de vencimiento, avisos del flujo de accesos, invitaciones y recuperación de contraseña. Los correos enlazan al sistema y no incluyen datos sensibles en su cuerpo.
 
 ## 12. Requisitos no funcionales
 
 | Atributo | Requisito |
 | --- | --- |
-| Seguridad | Cifrado en tránsito (TLS) y en reposo (KMS); control de acceso por rol y ámbito; MFA; secretos en bóveda; base de datos sin exposición a internet |
-| Disponibilidad | Objetivo 99,5% mensual; base de datos Multi-AZ con failover automático |
+| Seguridad | Cifrado en tránsito (TLS) y en reposo (KMS); control de acceso por rol y ámbito; MFA; ninguna contraseña en la base (identidad en Cognito, la API entra a la base con tokens de IAM); base de datos y API sin exposición a internet |
+| Disponibilidad | Objetivo 99,5% mensual en producción, con base de datos Multi-AZ y failover automático; el piloto usa una sola zona con respaldos diarios |
 | Rendimiento | Respuesta < 2 s en operaciones habituales; soporte de uso concurrente de múltiples empresas cliente |
-| Escalabilidad | API sin estado, escalado horizontal automático según demanda |
+| Escalabilidad | API sin estado, escalado automático según demanda (Lambda en el piloto; contenedores con balanceador a escala) |
 | Usabilidad | Interfaz clara en español, flujos guiados; curva de aprendizaje baja |
 | Accesibilidad | Lineamientos WCAG 2.1 AA |
 | Soporte móvil | PWA responsiva, acceso por QR; base para app nativa futura |
 | Auditoría | Bitácora de accesos y cambios sobre datos personales |
+| Integridad de documentos | Actas y documentos se suben directo del navegador al almacenamiento, sin pasar por la API; cada archivo queda registrado con su huella SHA-256, su tamaño y su versión, y solo se muestra cuando la carga se confirma |
 
 ## 13. Cumplimiento normativo
 
