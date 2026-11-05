@@ -61,7 +61,8 @@ INSERT INTO persona (rut, nombres, apellidos) VALUES
     ('14141414-3', 'Admin', 'Org A'),
     ('15151515-0', 'Admin', 'Empresa 1'),
     ('16161616-8', 'Coord', 'C1'),
-    ('17171717-5', 'Admin', 'Empresa 3');
+    ('17171717-5', 'Admin', 'Empresa 3'),
+    ('18181818-2', 'Diego', 'Afectado');  -- trabajador accidentado, no integra el comité
 
 INSERT INTO comite_integrante (comite_id, persona_id, tipo, representacion, cargo)
 SELECT c.id, p.id, 'titular', 'trabajadores', 'presidente'
@@ -73,6 +74,19 @@ SELECT c.id, 2026, 1, 1, 'realizada', '2026-01-15' FROM comite c;
 
 INSERT INTO documento (comite_id, tipo, nombre, archivo_key, contiene_datos_sensibles)
 SELECT c.id, 'investigacion', 'Investigación ' || c.nombre, 's3://doc/' || c.nombre, true FROM comite c;
+
+-- Investigación de un accidente en C1, con códigos SISESAT ficticios de prueba.
+INSERT INTO codigo_sisesat (clasificacion, codigo, descripcion) VALUES
+    ('forma_accidente', 'PRUEBA-F', 'Forma de prueba'),
+    ('agente_material', 'PRUEBA-A', 'Agente de prueba');
+INSERT INTO investigacion_accidente (comite_id, persona_id, tipo, gravedad, fecha_evento, descripcion, dias_perdidos, forma_id, agente_id)
+SELECT c.id, p.id, 'accidente_trabajo', 'grave', '2026-03-10 10:30-03', 'Caída desde altura en bodega', 15,
+       (SELECT id FROM codigo_sisesat WHERE codigo = 'PRUEBA-F'), (SELECT id FROM codigo_sisesat WHERE codigo = 'PRUEBA-A')
+FROM comite c, persona p WHERE c.nombre = 'C1' AND p.rut = '18181818-2';
+INSERT INTO investigacion_causa (investigacion_id, tipo, descripcion)
+SELECT id, 'basica', 'Falta de procedimiento de trabajo en altura' FROM investigacion_accidente;
+INSERT INTO investigacion_medida (investigacion_id, jerarquia, descripcion)
+SELECT id, 'control_ingenieria', 'Instalar barandas en el entrepiso' FROM investigacion_accidente;
 
 INSERT INTO usuario (rut, persona_id)
 SELECT rut, id FROM persona WHERE rut IN ('14141414-3','15151515-0','16161616-8','17171717-5');
@@ -124,6 +138,9 @@ SELECT pg_temp.verificar('organismo A: integrantes', (SELECT count(*) FROM comit
 SELECT pg_temp.verificar('organismo A: documentos', (SELECT count(*) FROM documento), 0);
 SELECT pg_temp.verificar('organismo A: organismos visibles', (SELECT count(*) FROM organismo), 1);
 SELECT pg_temp.verificar('organismo A: cumplimiento visible', (SELECT count(*) FROM v_cumplimiento_reuniones), 3);
+SELECT pg_temp.verificar('organismo A: no ve casos de accidentes', (SELECT count(*) FROM investigacion_accidente), 0);
+SELECT pg_temp.verificar('organismo A: no ve a la persona accidentada', (SELECT count(*) FROM persona WHERE rut = '18181818-2'), 0);
+SELECT pg_temp.verificar('organismo A: ve el total de accidentes graves', (SELECT sum(graves)::bigint FROM v_indicadores_siniestralidad), 1);
 
 -- Administrador de Empresa 1: ve su empresa, sus 2 comités y el detalle.
 SELECT set_config('app.usuario_id', (SELECT id::text FROM t_usuarios WHERE rut = '15151515-0'), true);
@@ -134,6 +151,9 @@ SELECT pg_temp.verificar('empresa 1: documentos', (SELECT count(*) FROM document
 SELECT pg_temp.verificar('empresa 1: no ve la persona de Empresa 2', (SELECT count(*) FROM persona WHERE rut = '12345678-5'), 0);
 SELECT pg_temp.verificar('empresa 1: ve la marca de su organismo', (SELECT count(*) FROM organismo), 1);
 SELECT pg_temp.verificar('empresa 1: no ve integraciones del organismo', (SELECT count(*) FROM integracion_organismo), 0);
+SELECT pg_temp.verificar('empresa 1: ve la investigación de C1', (SELECT count(*) FROM investigacion_accidente), 1);
+SELECT pg_temp.verificar('empresa 1: ve a la persona accidentada', (SELECT count(*) FROM persona WHERE rut = '18181818-2'), 1);
+SELECT pg_temp.verificar('empresa 1: ve causas y medidas', (SELECT count(*) FROM investigacion_causa) + (SELECT count(*) FROM investigacion_medida), 2);
 SELECT pg_temp.verificar('empresa 1: su rubro (sección CIIU) es construcción',
     (SELECT count(*) FROM empresa e JOIN actividad_economica a ON a.codigo = e.actividad_economica_codigo WHERE a.seccion = 'F'), 1);
 SELECT pg_temp.verificar('empresa 1: se le propone solo la plantilla de su rubro',
@@ -145,6 +165,7 @@ SELECT pg_temp.verificar('empresa 1: se le propone solo la plantilla de su rubro
 SELECT set_config('app.usuario_id', (SELECT id::text FROM t_usuarios WHERE rut = '16161616-8'), true);
 SELECT pg_temp.verificar('coordinador C1: comités', (SELECT count(*) FROM comite), 1);
 SELECT pg_temp.verificar('coordinador C1: documentos', (SELECT count(*) FROM documento), 1);
+SELECT pg_temp.verificar('coordinador C1: ve la investigación de su comité', (SELECT count(*) FROM investigacion_accidente), 1);
 
 -- Administrador de Empresa 3 (cliente directo): nada de la Mutualidad A.
 SELECT set_config('app.usuario_id', (SELECT id::text FROM t_usuarios WHERE rut = '17171717-5'), true);
@@ -153,6 +174,8 @@ SELECT pg_temp.verificar('empresa 3: comités', (SELECT count(*) FROM comite), 1
 SELECT pg_temp.verificar('empresa 3: organismos', (SELECT count(*) FROM organismo), 0);
 SELECT pg_temp.verificar('empresa 3: no ve comités de otras empresas', (SELECT count(*) FROM comite WHERE nombre IN ('C1','C2','C3')), 0);
 SELECT pg_temp.verificar('catálogo de organismos administradores visible para todos', (SELECT count(*) FROM organismo_administrador), 4);
+SELECT pg_temp.verificar('empresa 3: no ve investigaciones de otras empresas', (SELECT count(*) FROM investigacion_accidente), 0);
+SELECT pg_temp.verificar('empresa 3: no ve indicadores de otras empresas', (SELECT count(*) FROM v_indicadores_siniestralidad), 0);
 SELECT pg_temp.verificar('empresa 3: su organismo administrador es ACHS (3111)',
     (SELECT count(*) FROM empresa e JOIN organismo_administrador oa ON oa.id = e.organismo_administrador_id WHERE oa.codigo_suseso = '3111'), 1);
 
@@ -223,6 +246,12 @@ SELECT pg_temp.debe_fallar('coordinador con comité de otra empresa',
        WHERE u.rut = '16161616-8' AND e.razon_social = 'Empresa 1' AND c.nombre = 'C3'$q$);
 SELECT pg_temp.debe_fallar('comisión personalizada sin nombre',
     $q$INSERT INTO comision (comite_id, tipo) SELECT id, 'personalizada' FROM comite WHERE nombre = 'C1'$q$);
+SELECT pg_temp.debe_fallar('código SISESAT de otra clasificación (agente usado como forma)',
+    $q$UPDATE investigacion_accidente SET forma_id = (SELECT id FROM codigo_sisesat WHERE codigo = 'PRUEBA-A')$q$);
+SELECT pg_temp.debe_fallar('enfermedad profesional codificada con forma de accidente',
+    $q$UPDATE investigacion_accidente SET tipo = 'enfermedad_profesional'$q$);
+SELECT pg_temp.debe_fallar('investigación cerrada sin fecha de cierre',
+    $q$UPDATE investigacion_accidente SET estado = 'cerrada'$q$);
 SELECT pg_temp.debe_fallar('empresa con código de actividad inexistente',
     $q$UPDATE empresa SET actividad_economica_codigo = '999999' WHERE razon_social = 'Empresa 2'$q$);
 SELECT pg_temp.debe_fallar('código SUSESO con formato inválido',

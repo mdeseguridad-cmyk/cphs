@@ -15,10 +15,10 @@ Este repositorio contiene, por ahora, el diseño del producto y el esquema de ba
 | --- | --- |
 | [`docs/especificacion-funcional.md`](docs/especificacion-funcional.md) | Especificación funcional: módulos, roles, requisitos, cumplimiento, roadmap, costos, comparación de nubes y oferta para organismos |
 | [`docs/prototipo.html`](docs/prototipo.html) | Prototipo navegable con datos de ejemplo (incluye el perfil de organismo en marca blanca) |
-| [`docs/modelo-datos.html`](docs/modelo-datos.html) | Modelo de datos v5.2: diagrama entidad-relación y las 33 tablas |
+| [`docs/modelo-datos.html`](docs/modelo-datos.html) | Modelo de datos v5.3: diagrama entidad-relación y las 37 tablas |
 | [`docs/anexo-privacidad.html`](docs/anexo-privacidad.html) | Anexo de privacidad según la Ley 21.719 |
 | [`docs/arquitectura-aws.html`](docs/arquitectura-aws.html) | Arquitectura de referencia en AWS |
-| [`db/schema.sql`](db/schema.sql) | Esquema PostgreSQL 16: 33 tablas, restricciones y seguridad por fila |
+| [`db/schema.sql`](db/schema.sql) | Esquema PostgreSQL 16: 37 tablas, restricciones y seguridad por fila |
 | [`db/seed.sql`](db/seed.sql) | Catálogos base: regiones, organismos administradores con su código SUSESO, roles y niveles de certificación generales |
 | [`db/seed_comunas.sql`](db/seed_comunas.sql) | Las 346 comunas con su código único territorial (CUT) vigente desde 2018 |
 | [`db/seed_actividades.sql`](db/seed_actividades.sql) | Las 21 secciones del CIIU4.CL 2012 y los 674 códigos de actividad económica del SII, verificados contra la tabla oficial de homologación |
@@ -44,7 +44,7 @@ Para verificar el aislamiento y las reglas de negocio sobre una base de prueba (
 psql -d paritario -v ON_ERROR_STOP=1 -f db/test_rls.sql
 ```
 
-Debe terminar con `Todas las verificaciones pasaron.` Son 42 verificaciones; cualquier falla aborta el script con un mensaje `FALLA: …`.
+Debe terminar con `Todas las verificaciones pasaron.` Son 54 verificaciones; cualquier falla aborta el script con un mensaje `FALLA: …`.
 
 ### Cómo funciona el aislamiento
 
@@ -59,6 +59,8 @@ A partir de ese valor, la base de datos calcula el ámbito del usuario desde `us
 - **Administrador de empresa / Coordinador / Auditor:** su empresa, o solo su comité en el caso de un coordinador con comité asignado.
 - **Administrador / Asesor de organismo:** indicadores de todas las empresas de su organismo (comités, reuniones, actividades, auditorías), **sin** acceso a personas, integrantes ni documentos. El organismo ve datos agregados, no personas.
 - **Sin `app.usuario_id`:** no ve nada.
+
+Las investigaciones de accidentes y enfermedades profesionales contienen datos de salud: solo las ven la empresa y el comité. El organismo ve únicamente los totales de la vista `v_indicadores_siniestralidad` (accidentes, gravedad, días perdidos), sin casos ni personas.
 
 La seguridad por fila separa a los clientes entre sí. **Qué puede editar cada rol** dentro de su ámbito (por ejemplo, que un auditor solo lea) lo controla la API, no la base de datos.
 
@@ -77,6 +79,7 @@ Las vistas `v_cumplimiento_reuniones` y `v_paridad_comite` calculan el cumplimie
 
 ### Pendiente en la base de datos
 
+- Cargar los códigos SISESAT en `codigo_sisesat` (forma del accidente, agente material, ubicación de la lesión, agente de enfermedad y causa externa CIE-10) desde los anexos oficiales del Manual Técnico de Codificación SISESAT de la SUSESO. La tabla está creada y vacía.
 - Confirmar los códigos SUSESO de los organismos administradores (3111 ACHS, 3112 IST, 3113 Mutual de Seguridad) contra el texto vigente del Compendio, y si existe un código para el ISL. Se tomaron de búsquedas sobre el Compendio, sin acceso directo al documento.
 - Definir los plazos de `politica_retencion` con asesoría legal.
 - Las funciones de ámbito devuelven arreglos de ids; con miles de empresas por organismo conviene revisar su rendimiento con datos reales.

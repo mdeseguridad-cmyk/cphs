@@ -1,6 +1,6 @@
 -- =============================================================================
 -- Paritario — esquema de base de datos (PostgreSQL 16)
--- Modelo de datos v5.2: 33 tablas en 5 dominios.
+-- Modelo de datos v5.3: 37 tablas en 5 dominios.
 --
 --   01 Organización ........... organismo_administrador, organismo,
 --                               integracion_organismo, empresa,
@@ -11,7 +11,9 @@
 --   03 Programa y cumplimiento  programa_plantilla, actividad_tipo, actividad,
 --                               material_apoyo, actividad_material, reunion,
 --                               reunion_asistencia, documento,
---                               nivel_certificacion, auditoria
+--                               nivel_certificacion, auditoria,
+--                               codigo_sisesat, investigacion_accidente,
+--                               investigacion_causa, investigacion_medida
 --   04 Seguridad y acceso ..... usuario, rol, usuario_rol, solicitud_acceso,
 --                               log_acceso
 --   05 Cumplimiento (21.719) .. solicitud_derecho_titular, politica_retencion,
@@ -65,6 +67,15 @@ CREATE TYPE retencion_accion          AS ENUM ('anonimizar', 'eliminar', 'conser
 CREATE TYPE incidente_severidad       AS ENUM ('baja', 'media', 'alta', 'critica');
 CREATE TYPE incidente_estado          AS ENUM ('abierto', 'contenido', 'cerrado');
 CREATE TYPE encargado_tipo            AS ENUM ('nube', 'proveedor', 'subencargado');
+CREATE TYPE sisesat_clasificacion     AS ENUM ('forma_accidente', 'agente_material', 'ubicacion_lesion',
+                                               'agente_enfermedad', 'causa_externa_cie10');
+CREATE TYPE siniestro_tipo            AS ENUM ('accidente_trabajo', 'accidente_trayecto', 'enfermedad_profesional');
+CREATE TYPE siniestro_gravedad        AS ENUM ('leve', 'grave', 'fatal');
+CREATE TYPE investigacion_estado      AS ENUM ('abierta', 'en_analisis', 'cerrada');
+CREATE TYPE causa_tipo                AS ENUM ('inmediata', 'basica');
+CREATE TYPE jerarquia_control         AS ENUM ('eliminacion', 'sustitucion', 'control_ingenieria',
+                                               'control_administrativo', 'proteccion_personal');
+CREATE TYPE medida_estado             AS ENUM ('pendiente', 'en_ejecucion', 'implementada', 'verificada');
 
 -- -----------------------------------------------------------------------------
 -- Funciones de apoyo
@@ -532,6 +543,107 @@ CREATE TABLE reunion_asistencia (
 );
 COMMENT ON TABLE reunion_asistencia IS 'Asistencia de cada integrante a una reunión.';
 
+-- -----------------------------------------------------------------------------
+-- Investigación de accidentes y enfermedades profesionales (comisión del comité)
+-- -----------------------------------------------------------------------------
+
+-- Códigos de los anexos del Manual Técnico de Codificación SISESAT (SUSESO):
+-- clasificaciones OIT de forma del accidente, agente material y ubicación
+-- de la lesión, agente de enfermedad y causa externa CIE-10.
+-- Se carga desde los anexos oficiales; el esquema no trae datos.
+CREATE TABLE codigo_sisesat (
+    id             bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    clasificacion  sisesat_clasificacion NOT NULL,
+    codigo         varchar(10)  NOT NULL,
+    descripcion    varchar(300) NOT NULL,
+    codigo_padre   varchar(10),
+    vigente        boolean NOT NULL DEFAULT true,
+    UNIQUE (clasificacion, codigo)
+);
+COMMENT ON TABLE  codigo_sisesat IS 'Códigos de codificación SISESAT (SUSESO) para accidentes y enfermedades profesionales.';
+COMMENT ON COLUMN codigo_sisesat.codigo_padre IS 'Código del nivel superior en clasificaciones jerárquicas (OIT).';
+
+CREATE TABLE investigacion_accidente (
+    id                     bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    comite_id              bigint NOT NULL REFERENCES comite(id),
+    comision_id            bigint REFERENCES comision(id),
+    sucursal_id            bigint REFERENCES sucursal(id),
+    persona_id             bigint REFERENCES persona(id),
+    tipo                   siniestro_tipo NOT NULL,
+    gravedad               siniestro_gravedad NOT NULL DEFAULT 'leve',
+    fecha_evento           timestamptz NOT NULL,
+    folio_denuncia         varchar(40),
+    descripcion            text NOT NULL,
+    dias_perdidos          int CHECK (dias_perdidos >= 0),
+    forma_id               bigint REFERENCES codigo_sisesat(id),
+    agente_id              bigint REFERENCES codigo_sisesat(id),
+    ubicacion_lesion_id    bigint REFERENCES codigo_sisesat(id),
+    agente_enfermedad_id   bigint REFERENCES codigo_sisesat(id),
+    causa_externa_id       bigint REFERENCES codigo_sisesat(id),
+    estado                 investigacion_estado NOT NULL DEFAULT 'abierta',
+    fecha_cierre           date,
+    informe_documento_id   bigint REFERENCES documento(id),
+    created_at             timestamptz NOT NULL DEFAULT now(),
+    CHECK ((estado = 'cerrada') = (fecha_cierre IS NOT NULL)),
+    -- La enfermedad profesional se codifica por agente de enfermedad; el
+    -- accidente, por forma y agente material.
+    CHECK (tipo = 'enfermedad_profesional' OR agente_enfermedad_id IS NULL),
+    CHECK (tipo <> 'enfermedad_profesional' OR (forma_id IS NULL AND agente_id IS NULL))
+);
+COMMENT ON TABLE  investigacion_accidente IS 'Investigación de un accidente o enfermedad profesional por la comisión del comité. Contiene datos de salud: acceso reforzado.';
+COMMENT ON COLUMN investigacion_accidente.persona_id IS 'Persona afectada. Dato sensible: solo visible con ámbito de empresa o comité.';
+COMMENT ON COLUMN investigacion_accidente.folio_denuncia IS 'Folio de la DIAT o DIEP ante el organismo administrador.';
+CREATE INDEX investigacion_comite_idx ON investigacion_accidente (comite_id, fecha_evento);
+
+-- Cada código SISESAT debe venir de la clasificación que corresponde a su columna.
+CREATE FUNCTION validar_codigos_investigacion() RETURNS trigger
+LANGUAGE plpgsql AS $$
+DECLARE
+    par record;
+BEGIN
+    FOR par IN SELECT * FROM (VALUES
+        (NEW.forma_id,             'forma_accidente'::sisesat_clasificacion),
+        (NEW.agente_id,            'agente_material'),
+        (NEW.ubicacion_lesion_id,  'ubicacion_lesion'),
+        (NEW.agente_enfermedad_id, 'agente_enfermedad'),
+        (NEW.causa_externa_id,     'causa_externa_cie10')) v(id, clas)
+    LOOP
+        IF par.id IS NOT NULL AND NOT EXISTS (
+            SELECT 1 FROM codigo_sisesat WHERE id = par.id AND clasificacion = par.clas
+        ) THEN
+            RAISE EXCEPTION 'El código % no pertenece a la clasificación %', par.id, par.clas;
+        END IF;
+    END LOOP;
+    RETURN NEW;
+END;
+$$;
+CREATE TRIGGER investigacion_codigos_valida BEFORE INSERT OR UPDATE ON investigacion_accidente
+    FOR EACH ROW EXECUTE FUNCTION validar_codigos_investigacion();
+
+CREATE TABLE investigacion_causa (
+    id                bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    investigacion_id  bigint NOT NULL REFERENCES investigacion_accidente(id),
+    tipo              causa_tipo NOT NULL,
+    descripcion       text NOT NULL
+);
+COMMENT ON TABLE investigacion_causa IS 'Causas inmediatas y básicas identificadas en la investigación.';
+CREATE INDEX investigacion_causa_idx ON investigacion_causa (investigacion_id);
+
+CREATE TABLE investigacion_medida (
+    id                         bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    investigacion_id           bigint NOT NULL REFERENCES investigacion_accidente(id),
+    jerarquia                  jerarquia_control NOT NULL,
+    descripcion                text NOT NULL,
+    actividad_id               bigint REFERENCES actividad(id),
+    responsable_integrante_id  bigint REFERENCES comite_integrante(id),
+    fecha_compromiso           date,
+    estado                     medida_estado NOT NULL DEFAULT 'pendiente'
+);
+COMMENT ON TABLE  investigacion_medida IS 'Medidas correctivas, clasificadas según la prelación del DS 44.';
+COMMENT ON COLUMN investigacion_medida.jerarquia IS 'Prelación DS 44: eliminación, sustitución, control de ingeniería, control administrativo, protección personal.';
+COMMENT ON COLUMN investigacion_medida.actividad_id IS 'Actividad del programa de trabajo con que se ejecuta la medida.';
+CREATE INDEX investigacion_medida_idx ON investigacion_medida (investigacion_id);
+
 CREATE TABLE nivel_certificacion (
     id            smallint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     organismo_id  bigint REFERENCES organismo(id),
@@ -676,9 +788,14 @@ $$;
 
 CREATE FUNCTION personas_con_detalle() RETURNS bigint[]
 LANGUAGE sql STABLE SECURITY DEFINER SET search_path = paritario, pg_temp AS $$
-    SELECT coalesce(array_agg(DISTINCT ci.persona_id), '{}')
-    FROM comite_integrante ci
-    WHERE ci.comite_id = ANY (comites_con_detalle())
+    SELECT coalesce(array_agg(DISTINCT p), '{}')
+    FROM (
+        SELECT ci.persona_id FROM comite_integrante ci
+        WHERE ci.comite_id = ANY (comites_con_detalle())
+        UNION
+        SELECT ia.persona_id FROM investigacion_accidente ia
+        WHERE ia.comite_id = ANY (comites_con_detalle()) AND ia.persona_id IS NOT NULL
+    ) x(p)
 $$;
 
 -- Organismo: lo ven sus administradores y las empresas que lo usan (para la marca).
@@ -705,6 +822,18 @@ CREATE POLICY comite_ambito ON comite
     WITH CHECK (empresa_id = ANY (empresas_visibles()));  -- permite crear comités nuevos
 
 -- Tablas con datos de personas: solo con ámbito de empresa o comité.
+ALTER TABLE investigacion_accidente ENABLE ROW LEVEL SECURITY;
+CREATE POLICY investigacion_ambito ON investigacion_accidente
+    USING (comite_id = ANY (comites_con_detalle()));
+
+ALTER TABLE investigacion_causa ENABLE ROW LEVEL SECURITY;
+CREATE POLICY investigacion_causa_ambito ON investigacion_causa
+    USING (investigacion_id IN (SELECT id FROM investigacion_accidente));
+
+ALTER TABLE investigacion_medida ENABLE ROW LEVEL SECURITY;
+CREATE POLICY investigacion_medida_ambito ON investigacion_medida
+    USING (investigacion_id IN (SELECT id FROM investigacion_accidente));
+
 ALTER TABLE persona ENABLE ROW LEVEL SECURITY;
 CREATE POLICY persona_ambito ON persona
     USING (id = ANY (personas_con_detalle())
@@ -806,5 +935,25 @@ SELECT
 FROM comite c
 LEFT JOIN comite_integrante ci ON ci.comite_id = c.id AND ci.vigente
 GROUP BY c.id, c.n_titulares, c.n_suplentes;
+
+-- Indicadores de siniestralidad por comité y año, sin datos de personas.
+-- No usa security_invoker: el organismo no ve los casos (seguridad por fila
+-- de investigacion_accidente), pero sí estos totales de sus empresas. El
+-- filtro por ámbito se aplica explícitamente con comites_visibles().
+CREATE VIEW v_indicadores_siniestralidad AS
+SELECT
+    ia.comite_id,
+    extract(year FROM ia.fecha_evento)::int                         AS anio,
+    count(*) FILTER (WHERE ia.tipo = 'accidente_trabajo')           AS accidentes_trabajo,
+    count(*) FILTER (WHERE ia.tipo = 'accidente_trayecto')          AS accidentes_trayecto,
+    count(*) FILTER (WHERE ia.tipo = 'enfermedad_profesional')      AS enfermedades_profesionales,
+    count(*) FILTER (WHERE ia.gravedad = 'grave')                   AS graves,
+    count(*) FILTER (WHERE ia.gravedad = 'fatal')                   AS fatales,
+    coalesce(sum(ia.dias_perdidos), 0)                              AS dias_perdidos,
+    count(*) FILTER (WHERE ia.estado <> 'cerrada')                  AS investigaciones_abiertas
+FROM investigacion_accidente ia
+WHERE ia.comite_id = ANY (comites_visibles())
+GROUP BY ia.comite_id, extract(year FROM ia.fecha_evento);
+COMMENT ON VIEW v_indicadores_siniestralidad IS 'Totales de siniestralidad por comité y año, sin personas. Visible también para el organismo.';
 
 COMMIT;
