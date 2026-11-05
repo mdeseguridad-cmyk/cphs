@@ -1,10 +1,10 @@
 -- =============================================================================
 -- Paritario — esquema de base de datos (PostgreSQL 16)
--- Modelo de datos v5.5: 38 tablas en 5 dominios.
+-- Modelo de datos v5.6: 40 tablas en 5 dominios.
 --
---   01 Organización ........... organismo_administrador, organismo,
---                               integracion_organismo, empresa,
---                               sucursal, region, comuna,
+--   01 Organización ........... organismo_administrador, organismo, empresa,
+--                               sucursal, integracion, rol_externo,
+--                               sincronizacion, region, comuna,
 --                               actividad_seccion, actividad_economica
 --   02 Comité e integrantes ... comite, persona, comite_integrante, comision,
 --                               comision_integrante
@@ -40,7 +40,9 @@ SET search_path = paritario, public;
 -- -----------------------------------------------------------------------------
 CREATE TYPE organismo_tipo            AS ENUM ('mutualidad', 'servicio_publico', 'otro');
 CREATE TYPE organismo_estado          AS ENUM ('activo', 'en_implementacion', 'baja');
-CREATE TYPE integracion_tipo          AS ENUM ('sso', 'adherentes', 'certificacion', 'reportes');
+CREATE TYPE integracion_tipo          AS ENUM ('sso', 'empresas', 'centros', 'certificacion', 'reportes');
+CREATE TYPE sincronizacion_estado     AS ENUM ('correcta', 'con_errores', 'fallida');
+CREATE TYPE acceso_origen             AS ENUM ('manual', 'solicitud', 'sso');
 CREATE TYPE integracion_estado        AS ENUM ('en_prueba', 'activa', 'inactiva');
 CREATE TYPE empresa_estado            AS ENUM ('activo', 'suspendido', 'baja');
 CREATE TYPE sucursal_estado           AS ENUM ('vigente', 'no_vigente');
@@ -154,19 +156,6 @@ CREATE TABLE organismo (
 COMMENT ON TABLE  organismo IS 'Organismo que contrata la plataforma en marca blanca.';
 COMMENT ON COLUMN organismo.organismo_administrador_id IS 'Si el organismo contratante es un organismo administrador de la Ley 16.744, cuál es.';
 
-CREATE TABLE integracion_organismo (
-    id                     bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-    organismo_id           bigint NOT NULL REFERENCES organismo(id),
-    tipo                   integracion_tipo NOT NULL,
-    protocolo              varchar(30) NOT NULL,
-    configuracion          jsonb NOT NULL DEFAULT '{}'::jsonb,
-    estado                 integracion_estado NOT NULL DEFAULT 'en_prueba',
-    ultima_sincronizacion  timestamptz,
-    UNIQUE (organismo_id, tipo)
-);
-COMMENT ON TABLE  integracion_organismo IS 'Conexión con sistemas del organismo (SSO, adherentes, certificación, reportes).';
-COMMENT ON COLUMN integracion_organismo.configuracion IS 'Parámetros sin secretos. Los secretos van en la bóveda (Secrets Manager).';
-
 CREATE TABLE region (
     id      smallint PRIMARY KEY,
     codigo  char(2) GENERATED ALWAYS AS (lpad(id::text, 2, '0')) STORED,
@@ -216,6 +205,7 @@ CREATE TABLE empresa (
     actividad_economica_codigo char(6) REFERENCES actividad_economica(codigo),
     organismo_id             bigint REFERENCES organismo(id),
     organismo_administrador_id smallint REFERENCES organismo_administrador(id),
+    codigo_contrato          varchar(40),
     plan                     varchar(40),
     estado                   empresa_estado NOT NULL DEFAULT 'activo',
     fecha_alta               date NOT NULL DEFAULT current_date,
@@ -225,7 +215,9 @@ COMMENT ON TABLE  empresa IS 'Empresa cliente de la plataforma (tenant).';
 COMMENT ON COLUMN empresa.actividad_economica_codigo IS 'Código de actividad económica principal ante el SII. Su sección es el rubro de la empresa.';
 COMMENT ON COLUMN empresa.organismo_id IS 'Organismo que la entrega en marca blanca; nulo si es cliente directo.';
 COMMENT ON COLUMN empresa.organismo_administrador_id IS 'Organismo administrador al que está adherida la empresa.';
+COMMENT ON COLUMN empresa.codigo_contrato IS 'Número de adherente o de contrato con que el organismo (o Paritario, si es cliente directo) identifica a la empresa. Une el SSO y las sincronizaciones.';
 CREATE INDEX empresa_organismo_idx ON empresa (organismo_id);
+CREATE UNIQUE INDEX empresa_contrato_uq ON empresa (coalesce(organismo_id, 0), codigo_contrato) WHERE codigo_contrato IS NOT NULL;
 
 CREATE TABLE sucursal (
     id                 bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
@@ -236,10 +228,52 @@ CREATE TABLE sucursal (
     direccion_numero   varchar(20),
     comuna_id          int REFERENCES comuna(id),
     masa_trabajadores  int CHECK (masa_trabajadores >= 0),
-    estado             sucursal_estado NOT NULL DEFAULT 'vigente'
+    estado             sucursal_estado NOT NULL DEFAULT 'vigente',
+    codigo_externo     varchar(40)
 );
 COMMENT ON TABLE sucursal IS 'Centro de trabajo donde se constituye un comité.';
+COMMENT ON COLUMN sucursal.codigo_externo IS 'Código del centro en el sistema del cliente u organismo; une la sincronización de centros.';
 CREATE INDEX sucursal_empresa_idx ON sucursal (empresa_id);
+CREATE UNIQUE INDEX sucursal_codigo_externo_uq ON sucursal (empresa_id, codigo_externo) WHERE codigo_externo IS NOT NULL;
+
+-- Integraciones con sistemas del cliente: un organismo (marca blanca) o una
+-- empresa cliente directa. Una empresa solo integra su inicio de sesión y sus
+-- centros; el listado de empresas es propio de un organismo.
+CREATE TABLE integracion (
+    id                     bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    organismo_id           bigint REFERENCES organismo(id),
+    empresa_id             bigint REFERENCES empresa(id),
+    tipo                   integracion_tipo NOT NULL,
+    protocolo              varchar(30) NOT NULL,
+    configuracion          jsonb NOT NULL DEFAULT '{}'::jsonb,
+    secreto_ref            varchar(200),
+    estado                 integracion_estado NOT NULL DEFAULT 'en_prueba',
+    ultima_sincronizacion  timestamptz,
+    CHECK (num_nonnulls(organismo_id, empresa_id) = 1),
+    CHECK (empresa_id IS NULL OR tipo IN ('sso', 'centros')),
+    UNIQUE NULLS NOT DISTINCT (organismo_id, empresa_id, tipo)
+);
+COMMENT ON TABLE  integracion IS 'Conexión con sistemas del organismo o de la empresa cliente: inicio de sesión (SSO), empresas o contratos, centros de trabajo, certificación y reportes.';
+COMMENT ON COLUMN integracion.configuracion IS 'Parámetros sin secretos (URL del servicio, atributos del SSO).';
+COMMENT ON COLUMN integracion.secreto_ref IS 'Nombre del secreto en Secrets Manager con las credenciales del servicio. Nunca el secreto mismo.';
+
+-- Bitácora de cada sincronización de empresas o centros.
+CREATE TABLE sincronizacion (
+    id              bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    integracion_id  bigint NOT NULL REFERENCES integracion(id),
+    inicio          timestamptz NOT NULL DEFAULT now(),
+    fin             timestamptz,
+    estado          sincronizacion_estado NOT NULL,
+    nuevos          int NOT NULL DEFAULT 0 CHECK (nuevos >= 0),
+    actualizados    int NOT NULL DEFAULT 0 CHECK (actualizados >= 0),
+    bajas           int NOT NULL DEFAULT 0 CHECK (bajas >= 0),
+    errores         int NOT NULL DEFAULT 0 CHECK (errores >= 0),
+    detalle         jsonb NOT NULL DEFAULT '[]'::jsonb,
+    archivo_key     varchar(300)
+);
+COMMENT ON TABLE  sincronizacion IS 'Resultado de cada carga desde un servicio del cliente u organismo.';
+COMMENT ON COLUMN sincronizacion.detalle IS 'Errores por registro: código externo y motivo, sin datos personales.';
+CREATE INDEX sincronizacion_integracion_idx ON sincronizacion (integracion_id, inicio DESC);
 
 -- =============================================================================
 -- 02 · Comité, integrantes y comisiones
@@ -358,6 +392,17 @@ CREATE TABLE rol (
 COMMENT ON TABLE  rol IS 'Rol funcional del sistema.';
 COMMENT ON COLUMN rol.es_de_organismo IS 'true para roles con ámbito de organismo (marca blanca).';
 
+-- Equivalencia entre el rol que envía el SSO del cliente y el rol de Paritario.
+CREATE TABLE rol_externo (
+    id              bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    integracion_id  bigint NOT NULL REFERENCES integracion(id),
+    valor           varchar(100) NOT NULL,
+    rol_id          smallint NOT NULL REFERENCES rol(id),
+    UNIQUE (integracion_id, valor)
+);
+COMMENT ON TABLE rol_externo IS 'Rol del sistema del cliente (valor que llega en el SSO) → rol de empresa de Paritario: administrador, coordinador o auditor.';
+
+
 CREATE TABLE usuario_rol (
     id            bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     usuario_id    bigint   NOT NULL REFERENCES usuario(id),
@@ -366,13 +411,35 @@ CREATE TABLE usuario_rol (
     empresa_id    bigint REFERENCES empresa(id),
     comite_id     bigint REFERENCES comite(id),
     vigente       boolean NOT NULL DEFAULT true,
+    origen        acceso_origen NOT NULL DEFAULT 'manual',
+    integracion_id bigint REFERENCES integracion(id),
     created_at    timestamptz NOT NULL DEFAULT now(),
+    -- Un acceso que viene del SSO de un cliente recuerda de qué integración.
+    CHECK ((origen = 'sso') = (integracion_id IS NOT NULL)),
     -- Exactamente un ámbito principal: organismo o empresa.
     CHECK (num_nonnulls(organismo_id, empresa_id) = 1),
     -- Un ámbito de comité siempre va dentro de una empresa.
     CHECK (comite_id IS NULL OR empresa_id IS NOT NULL)
 );
 COMMENT ON TABLE usuario_rol IS 'Asignación de rol CON ámbito: base del control de acceso y de la seguridad por fila.';
+COMMENT ON COLUMN usuario_rol.origen IS 'manual: asignado en Paritario · solicitud: autoservicio aprobado · sso: lo entrega el SSO del cliente en cada ingreso (la sincronización solo toca estos).';
+CREATE INDEX usuario_rol_sso_idx ON usuario_rol (usuario_id, integracion_id) WHERE origen = 'sso';
+
+-- Un rol externo solo puede equivaler a un rol de empresa.
+CREATE FUNCTION validar_rol_externo() RETURNS trigger
+LANGUAGE plpgsql SET search_path = paritario, pg_temp AS $$
+BEGIN
+    IF (SELECT es_de_organismo FROM rol WHERE id = NEW.rol_id) THEN
+        RAISE EXCEPTION 'El rol externo "%" solo puede equivaler a un rol de empresa (administrador, coordinador o auditor)', NEW.valor;
+    END IF;
+    IF (SELECT tipo FROM integracion WHERE id = NEW.integracion_id) <> 'sso' THEN
+        RAISE EXCEPTION 'Los roles externos pertenecen a una integración de tipo sso';
+    END IF;
+    RETURN NEW;
+END;
+$$;
+CREATE TRIGGER rol_externo_valida BEFORE INSERT OR UPDATE ON rol_externo
+    FOR EACH ROW EXECUTE FUNCTION validar_rol_externo();
 CREATE INDEX usuario_rol_usuario_idx ON usuario_rol (usuario_id) WHERE vigente;
 
 -- Coherencia entre el rol y su ámbito, y entre el comité y la empresa.
@@ -885,9 +952,18 @@ CREATE POLICY organismo_ambito ON organismo
     USING (id = ANY (organismos_visibles())
            OR id IN (SELECT organismo_id FROM empresa));
 
-ALTER TABLE integracion_organismo ENABLE ROW LEVEL SECURITY;
-CREATE POLICY integracion_ambito ON integracion_organismo
-    USING (organismo_id = ANY (organismos_visibles()));
+ALTER TABLE integracion ENABLE ROW LEVEL SECURITY;
+CREATE POLICY integracion_ambito ON integracion
+    USING (organismo_id = ANY (organismos_visibles())
+           OR empresa_id = ANY (empresas_visibles()));
+
+ALTER TABLE rol_externo ENABLE ROW LEVEL SECURITY;
+CREATE POLICY rol_externo_ambito ON rol_externo
+    USING (integracion_id IN (SELECT id FROM integracion));
+
+ALTER TABLE sincronizacion ENABLE ROW LEVEL SECURITY;
+CREATE POLICY sincronizacion_ambito ON sincronizacion
+    USING (integracion_id IN (SELECT id FROM integracion));
 
 ALTER TABLE empresa ENABLE ROW LEVEL SECURITY;
 CREATE POLICY empresa_ambito ON empresa
@@ -1036,5 +1112,334 @@ FROM investigacion_accidente ia
 WHERE ia.comite_id = ANY (comites_visibles())
 GROUP BY ia.comite_id, extract(year FROM ia.fecha_evento);
 COMMENT ON VIEW v_indicadores_siniestralidad IS 'Totales de siniestralidad por comité y año, sin personas. Visible también para el organismo.';
+
+-- =============================================================================
+-- Integraciones: sincronización de empresas y centros, y accesos desde el SSO
+-- =============================================================================
+-- La aplicación no puede crear empresas ni ver las de otros clientes (seguridad
+-- por fila). Estas funciones hacen esas operaciones acotadas a la integración
+-- que se indica: solo tocan las empresas y centros de su dueño (organismo o
+-- empresa), nunca borran (marcan bajas) y dejan bitácora en sincronizacion.
+
+CREATE FUNCTION normalizar_rut(p text) RETURNS text
+LANGUAGE sql IMMUTABLE AS $$
+    SELECT upper(regexp_replace(coalesce(p, ''), '[.\s]', '', 'g'))
+$$;
+
+-- Listado completo de empresas (o contratos) de un organismo. Formato:
+--   [{"contrato": "A-001", "rut": "76123456-7", "razon_social": "…",
+--     "nombre_fantasia": "…", "actividad": "421000", "vigente": true}, …]
+-- Los contratos del organismo que no vienen en el listado quedan de baja,
+-- salvo que más del 10 % de las filas tenga errores (listado sospechoso).
+CREATE FUNCTION importar_empresas(p_integracion bigint, p_datos jsonb, p_archivo text DEFAULT NULL)
+RETURNS bigint
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = paritario, pg_temp AS $$
+DECLARE
+    v_int     integracion%ROWTYPE;
+    v_org     bigint;
+    v_oa      smallint;
+    r         jsonb;
+    v_cod     text;
+    v_rut     text;
+    v_id      bigint;
+    v_otro    bigint;
+    v_estado  empresa_estado;
+    v_codigos text[] := '{}';
+    v_total   int;
+    n_nuevos  int := 0;
+    n_act     int := 0;
+    n_bajas   int := 0;
+    n         int;
+    n_err     int;
+    v_errores jsonb := '[]';
+    v_sinc    bigint;
+BEGIN
+    SELECT * INTO v_int FROM integracion WHERE id = p_integracion;
+    IF NOT FOUND OR v_int.tipo <> 'empresas' OR v_int.estado = 'inactiva' THEN
+        RAISE EXCEPTION 'La integración % no es un listado de empresas activo', p_integracion;
+    END IF;
+    IF jsonb_typeof(p_datos) IS DISTINCT FROM 'array' OR jsonb_array_length(p_datos) = 0 THEN
+        INSERT INTO sincronizacion (integracion_id, fin, estado, detalle, archivo_key)
+        VALUES (p_integracion, now(), 'fallida', '[{"motivo": "listado vacío o con formato inválido"}]', p_archivo)
+        RETURNING id INTO v_sinc;
+        RETURN v_sinc;
+    END IF;
+    v_org := v_int.organismo_id;
+    SELECT organismo_administrador_id INTO v_oa FROM organismo WHERE id = v_org;
+    v_total := jsonb_array_length(p_datos);
+
+    FOR r IN SELECT value FROM jsonb_array_elements(p_datos) LOOP
+        v_cod := nullif(trim(r->>'contrato'), '');
+        v_id := NULL;
+        BEGIN
+            IF v_cod IS NULL THEN
+                RAISE EXCEPTION 'sin código de contrato';
+            END IF;
+            IF v_cod = ANY (v_codigos) THEN
+                RAISE EXCEPTION 'contrato repetido en el listado';
+            END IF;
+            v_codigos := v_codigos || v_cod;
+            v_rut := normalizar_rut(r->>'rut');
+            IF NOT rut_valido(v_rut) THEN
+                RAISE EXCEPTION 'RUT de empresa inválido';
+            END IF;
+            v_estado := CASE WHEN coalesce((r->>'vigente')::boolean, true) THEN 'activo' ELSE 'baja' END;
+
+            SELECT id INTO v_id FROM empresa WHERE organismo_id = v_org AND codigo_contrato = v_cod;
+            IF v_id IS NULL THEN
+                SELECT id INTO v_otro FROM empresa WHERE rut = v_rut;
+                IF v_otro IS NOT NULL THEN
+                    IF (SELECT organismo_id FROM empresa WHERE id = v_otro) IS DISTINCT FROM v_org THEN
+                        RAISE EXCEPTION 'la empresa ya es cliente de Paritario por otra vía';
+                    END IF;
+                    v_id := v_otro;  -- empresa del organismo que aún no tenía contrato
+                ELSE
+                    INSERT INTO empresa (rut, razon_social, nombre_fantasia, actividad_economica_codigo,
+                                         organismo_id, organismo_administrador_id, codigo_contrato, estado)
+                    VALUES (v_rut, r->>'razon_social', r->>'nombre_fantasia', nullif(r->>'actividad', ''),
+                            v_org, v_oa, v_cod, v_estado);
+                    n_nuevos := n_nuevos + 1;
+                    CONTINUE;
+                END IF;
+            ELSIF (SELECT rut FROM empresa WHERE id = v_id) <> v_rut THEN
+                RAISE EXCEPTION 'el contrato ya corresponde a otro RUT';
+            END IF;
+
+            UPDATE empresa SET
+                codigo_contrato            = v_cod,
+                razon_social               = coalesce(r->>'razon_social', razon_social),
+                nombre_fantasia            = coalesce(r->>'nombre_fantasia', nombre_fantasia),
+                actividad_economica_codigo = coalesce(nullif(r->>'actividad', ''), actividad_economica_codigo),
+                estado                     = v_estado
+            WHERE id = v_id
+              AND (codigo_contrato, razon_social, nombre_fantasia, actividad_economica_codigo, estado)
+                  IS DISTINCT FROM
+                  (v_cod, coalesce(r->>'razon_social', razon_social), coalesce(r->>'nombre_fantasia', nombre_fantasia),
+                   coalesce(nullif(r->>'actividad', ''), actividad_economica_codigo), v_estado);
+            GET DIAGNOSTICS n = ROW_COUNT;
+            n_act := n_act + n;
+        EXCEPTION WHEN others THEN
+            v_errores := v_errores || jsonb_build_object('contrato', v_cod, 'motivo', SQLERRM);
+        END;
+    END LOOP;
+
+    n_err := jsonb_array_length(v_errores);
+    IF n_err * 10 <= v_total THEN
+        UPDATE empresa SET estado = 'baja'
+        WHERE organismo_id = v_org AND codigo_contrato IS NOT NULL
+          AND NOT (codigo_contrato = ANY (v_codigos)) AND estado <> 'baja';
+        GET DIAGNOSTICS n_bajas = ROW_COUNT;
+    ELSE
+        v_errores := v_errores || '{"motivo": "más del 10 % de filas con error: no se aplicaron bajas"}'::jsonb;
+    END IF;
+
+    INSERT INTO sincronizacion (integracion_id, fin, estado, nuevos, actualizados, bajas, errores, detalle, archivo_key)
+    VALUES (p_integracion, now(),
+            CASE WHEN jsonb_array_length(v_errores) = 0 THEN 'correcta' ELSE 'con_errores' END::sincronizacion_estado,
+            n_nuevos, n_act, n_bajas, n_err, v_errores, p_archivo)
+    RETURNING id INTO v_sinc;
+    UPDATE integracion SET ultima_sincronizacion = now() WHERE id = p_integracion;
+    RETURN v_sinc;
+END;
+$$;
+COMMENT ON FUNCTION importar_empresas IS 'Sincroniza el listado de empresas o contratos de un organismo. Devuelve el id de sincronizacion.';
+
+-- Listado completo de centros de trabajo. Formato:
+--   [{"contrato": "A-001", "codigo": "CT-12", "nombre": "…", "alias": "…",
+--     "calle": "…", "numero": "…", "comuna": "13101", "trabajadores": 120,
+--     "vigente": true}, …]
+-- Si la integración es de una empresa, "contrato" se ignora.
+CREATE FUNCTION importar_centros(p_integracion bigint, p_datos jsonb, p_archivo text DEFAULT NULL)
+RETURNS bigint
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = paritario, pg_temp AS $$
+DECLARE
+    v_int      integracion%ROWTYPE;
+    r          jsonb;
+    v_emp      bigint;
+    v_cod      text;
+    v_ref      text;
+    v_id       bigint;
+    v_comuna   int;
+    v_estado   sucursal_estado;
+    v_vistos   text[] := '{}';
+    v_empresas bigint[];
+    v_total    int;
+    n_nuevos   int := 0;
+    n_act      int := 0;
+    n_bajas    int := 0;
+    n          int;
+    n_err      int;
+    v_errores  jsonb := '[]';
+    v_sinc     bigint;
+BEGIN
+    SELECT * INTO v_int FROM integracion WHERE id = p_integracion;
+    IF NOT FOUND OR v_int.tipo <> 'centros' OR v_int.estado = 'inactiva' THEN
+        RAISE EXCEPTION 'La integración % no es un listado de centros activo', p_integracion;
+    END IF;
+    IF jsonb_typeof(p_datos) IS DISTINCT FROM 'array' OR jsonb_array_length(p_datos) = 0 THEN
+        INSERT INTO sincronizacion (integracion_id, fin, estado, detalle, archivo_key)
+        VALUES (p_integracion, now(), 'fallida', '[{"motivo": "listado vacío o con formato inválido"}]', p_archivo)
+        RETURNING id INTO v_sinc;
+        RETURN v_sinc;
+    END IF;
+    v_empresas := CASE WHEN v_int.empresa_id IS NOT NULL THEN ARRAY[v_int.empresa_id]
+                       ELSE ARRAY(SELECT id FROM empresa WHERE organismo_id = v_int.organismo_id) END;
+    v_total := jsonb_array_length(p_datos);
+
+    FOR r IN SELECT value FROM jsonb_array_elements(p_datos) LOOP
+        v_cod := nullif(trim(r->>'codigo'), '');
+        v_ref := coalesce(r->>'contrato', '') || '/' || coalesce(v_cod, '');
+        BEGIN
+            IF v_cod IS NULL THEN
+                RAISE EXCEPTION 'sin código de centro';
+            END IF;
+            IF v_int.empresa_id IS NOT NULL THEN
+                v_emp := v_int.empresa_id;
+            ELSE
+                SELECT id INTO v_emp FROM empresa
+                WHERE organismo_id = v_int.organismo_id AND codigo_contrato = r->>'contrato';
+                IF v_emp IS NULL THEN
+                    RAISE EXCEPTION 'contrato desconocido';
+                END IF;
+            END IF;
+            IF (v_emp || ':' || v_cod) = ANY (v_vistos) THEN
+                RAISE EXCEPTION 'centro repetido en el listado';
+            END IF;
+            v_vistos := v_vistos || (v_emp || ':' || v_cod);
+            v_comuna := NULL;
+            IF nullif(r->>'comuna', '') IS NOT NULL THEN
+                SELECT id INTO v_comuna FROM comuna WHERE codigo = lpad(r->>'comuna', 5, '0');
+                IF v_comuna IS NULL THEN
+                    RAISE EXCEPTION 'comuna desconocida';
+                END IF;
+            END IF;
+            v_estado := CASE WHEN coalesce((r->>'vigente')::boolean, true) THEN 'vigente' ELSE 'no_vigente' END;
+
+            SELECT id INTO v_id FROM sucursal WHERE empresa_id = v_emp AND codigo_externo = v_cod;
+            IF v_id IS NULL THEN
+                INSERT INTO sucursal (empresa_id, codigo_externo, nombre, alias, direccion_calle,
+                                      direccion_numero, comuna_id, masa_trabajadores, estado)
+                VALUES (v_emp, v_cod, r->>'nombre', r->>'alias', r->>'calle', r->>'numero', v_comuna,
+                        (r->>'trabajadores')::int, v_estado);
+                n_nuevos := n_nuevos + 1;
+            ELSE
+                UPDATE sucursal SET
+                    nombre            = coalesce(r->>'nombre', nombre),
+                    alias             = coalesce(r->>'alias', alias),
+                    direccion_calle   = coalesce(r->>'calle', direccion_calle),
+                    direccion_numero  = coalesce(r->>'numero', direccion_numero),
+                    comuna_id         = coalesce(v_comuna, comuna_id),
+                    masa_trabajadores = coalesce((r->>'trabajadores')::int, masa_trabajadores),
+                    estado            = v_estado
+                WHERE id = v_id
+                  AND (nombre, alias, direccion_calle, direccion_numero, comuna_id, masa_trabajadores, estado)
+                      IS DISTINCT FROM
+                      (coalesce(r->>'nombre', nombre), coalesce(r->>'alias', alias),
+                       coalesce(r->>'calle', direccion_calle), coalesce(r->>'numero', direccion_numero),
+                       coalesce(v_comuna, comuna_id), coalesce((r->>'trabajadores')::int, masa_trabajadores), v_estado);
+                GET DIAGNOSTICS n = ROW_COUNT;
+                n_act := n_act + n;
+            END IF;
+        EXCEPTION WHEN others THEN
+            v_errores := v_errores || jsonb_build_object('centro', v_ref, 'motivo', SQLERRM);
+        END;
+    END LOOP;
+
+    n_err := jsonb_array_length(v_errores);
+    IF n_err * 10 <= v_total THEN
+        UPDATE sucursal SET estado = 'no_vigente'
+        WHERE empresa_id = ANY (v_empresas) AND codigo_externo IS NOT NULL
+          AND NOT ((empresa_id || ':' || codigo_externo) = ANY (v_vistos)) AND estado <> 'no_vigente';
+        GET DIAGNOSTICS n_bajas = ROW_COUNT;
+    ELSE
+        v_errores := v_errores || '{"motivo": "más del 10 % de filas con error: no se aplicaron bajas"}'::jsonb;
+    END IF;
+
+    INSERT INTO sincronizacion (integracion_id, fin, estado, nuevos, actualizados, bajas, errores, detalle, archivo_key)
+    VALUES (p_integracion, now(),
+            CASE WHEN jsonb_array_length(v_errores) = 0 THEN 'correcta' ELSE 'con_errores' END::sincronizacion_estado,
+            n_nuevos, n_act, n_bajas, n_err, v_errores, p_archivo)
+    RETURNING id INTO v_sinc;
+    UPDATE integracion SET ultima_sincronizacion = now() WHERE id = p_integracion;
+    RETURN v_sinc;
+END;
+$$;
+COMMENT ON FUNCTION importar_centros IS 'Sincroniza los centros de trabajo de un organismo (por contrato) o de una empresa cliente. Devuelve el id de sincronizacion.';
+
+-- Accesos desde el SSO del cliente, en cada ingreso. El SSO entrega el RUT,
+-- un rol externo y los contratos del usuario. Deja vigentes solo los accesos
+-- que corresponden y revoca los demás accesos de origen sso de esa
+-- integración; los asignados a mano o por solicitud no se tocan.
+-- Devuelve el id del usuario.
+CREATE FUNCTION sincronizar_accesos_sso(p_integracion bigint, p_rut text, p_cognito_sub uuid,
+                                        p_rol_externo text, p_contratos text[] DEFAULT '{}')
+RETURNS bigint
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = paritario, pg_temp AS $$
+DECLARE
+    v_int  integracion%ROWTYPE;
+    v_rut  text := normalizar_rut(p_rut);
+    v_usr  usuario%ROWTYPE;
+    v_rol  smallint;
+    v_emps bigint[];
+    v_emp  bigint;
+BEGIN
+    SELECT * INTO v_int FROM integracion WHERE id = p_integracion;
+    IF NOT FOUND OR v_int.tipo <> 'sso' OR v_int.estado = 'inactiva' THEN
+        RAISE EXCEPTION 'La integración % no es un SSO activo', p_integracion;
+    END IF;
+    IF p_cognito_sub IS NULL THEN
+        RAISE EXCEPTION 'Falta el identificador de la cuenta';
+    END IF;
+
+    SELECT * INTO v_usr FROM usuario WHERE rut = v_rut;
+    IF NOT FOUND THEN
+        INSERT INTO usuario (rut, persona_id, cognito_sub, estado, ultimo_acceso)
+        VALUES (v_rut, (SELECT id FROM persona WHERE rut = v_rut), p_cognito_sub, 'activo', now())
+        RETURNING * INTO v_usr;
+    ELSE
+        IF v_usr.estado = 'bloqueado' THEN
+            RAISE EXCEPTION 'La cuenta está bloqueada';
+        END IF;
+        IF v_usr.cognito_sub IS NOT NULL AND v_usr.cognito_sub <> p_cognito_sub THEN
+            RAISE EXCEPTION 'El RUT ya está asociado a otra cuenta';
+        END IF;
+        UPDATE usuario SET cognito_sub = p_cognito_sub, estado = 'activo', ultimo_acceso = now()
+        WHERE id = v_usr.id;
+    END IF;
+
+    SELECT rol_id INTO v_rol FROM rol_externo WHERE integracion_id = p_integracion AND valor = p_rol_externo;
+    IF v_rol IS NULL THEN
+        v_emps := '{}';
+    ELSIF v_int.empresa_id IS NOT NULL THEN
+        v_emps := ARRAY[v_int.empresa_id];
+    ELSE
+        v_emps := ARRAY(SELECT id FROM empresa
+                        WHERE organismo_id = v_int.organismo_id
+                          AND codigo_contrato = ANY (coalesce(p_contratos, '{}'))
+                          AND estado <> 'baja');
+    END IF;
+
+    UPDATE usuario_rol SET vigente = false
+    WHERE usuario_id = v_usr.id AND origen = 'sso' AND integracion_id = p_integracion AND vigente
+      AND NOT (rol_id IS NOT DISTINCT FROM v_rol AND empresa_id = ANY (v_emps));
+
+    FOREACH v_emp IN ARRAY v_emps LOOP
+        UPDATE usuario_rol SET vigente = true
+        WHERE usuario_id = v_usr.id AND origen = 'sso' AND integracion_id = p_integracion
+          AND rol_id = v_rol AND empresa_id = v_emp AND comite_id IS NULL;
+        IF NOT FOUND THEN
+            INSERT INTO usuario_rol (usuario_id, rol_id, empresa_id, origen, integracion_id)
+            VALUES (v_usr.id, v_rol, v_emp, 'sso', p_integracion);
+        END IF;
+    END LOOP;
+    RETURN v_usr.id;
+END;
+$$;
+COMMENT ON FUNCTION sincronizar_accesos_sso IS 'Concilia los accesos que entrega el SSO de un cliente en cada ingreso. Solo toca accesos de origen sso de esa integración.';
+
+-- Solo la aplicación ejecuta estas funciones (no el público).
+REVOKE EXECUTE ON FUNCTION importar_empresas(bigint, jsonb, text) FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION importar_centros(bigint, jsonb, text) FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION sincronizar_accesos_sso(bigint, text, uuid, text, text[]) FROM PUBLIC;
 
 COMMIT;

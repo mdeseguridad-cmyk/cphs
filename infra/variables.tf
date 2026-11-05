@@ -118,10 +118,53 @@ variable "dominio_correo" {
   default     = ""
 }
 
+# --- Integraciones con clientes y organismos ------------------------------
+
+variable "proveedores_identidad" {
+  description = <<-EOT
+    Inicio de sesión con el sistema de un cliente u organismo, federado en
+    Cognito. La clave es el nombre del proveedor (se registra igual en
+    integracion.configuracion de la base). Cada proveedor envía el RUT, el
+    rol (administrador, coordinador o auditor según su propio código) y los
+    contratos del usuario; los nombres de esos atributos van en "atributos".
+    Requiere dominio propio: la dirección de retorno se registra en el
+    sistema del cliente y no puede cambiar.
+  EOT
+  type = map(object({
+    tipo          = string               # SAML u OIDC
+    metadata_url  = optional(string, "") # SAML
+    emisor        = optional(string, "") # OIDC: issuer
+    client_id     = optional(string, "") # OIDC
+    client_secret = optional(string, "") # OIDC
+    atributos = object({
+      rut       = string
+      rol       = string
+      contratos = optional(string, "")
+      correo    = optional(string, "email")
+    })
+  }))
+  default   = {}
+  sensitive = true
+
+  validation {
+    condition     = alltrue([for k, p in var.proveedores_identidad : contains(["SAML", "OIDC"], p.tipo)])
+    error_message = "El tipo de cada proveedor debe ser SAML u OIDC."
+  }
+  validation {
+    condition = alltrue([for k, p in var.proveedores_identidad :
+    p.tipo == "SAML" ? p.metadata_url != "" : (p.emisor != "" && p.client_id != "" && p.client_secret != "")])
+    error_message = "SAML necesita metadata_url; OIDC necesita emisor, client_id y client_secret."
+  }
+  validation {
+    condition     = alltrue([for k in keys(var.proveedores_identidad) : can(regex("^[A-Za-z0-9-]{3,32}$", k))])
+    error_message = "El nombre de cada proveedor debe tener 3 a 32 letras, números o guiones."
+  }
+}
+
 # --- Horario de encendido -------------------------------------------------
 
 variable "horario" {
-  description = "siempre | dias_habiles (lunes a viernes, 07:30–19:30) | fines_de_semana (sábado 07:00 a domingo 23:00). Hora de Chile."
+  description = "Encendido de la base: siempre | dias_habiles (lunes a viernes, 07:00–20:00) | fines_de_semana (sábado 07:00 a domingo 23:00). Hora de Chile."
   type        = string
   default     = "siempre"
 

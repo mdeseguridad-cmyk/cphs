@@ -150,7 +150,7 @@ SELECT pg_temp.verificar('empresa 1: integrantes', (SELECT count(*) FROM comite_
 SELECT pg_temp.verificar('empresa 1: documentos', (SELECT count(*) FROM documento), 2);
 SELECT pg_temp.verificar('empresa 1: no ve la persona de Empresa 2', (SELECT count(*) FROM persona WHERE rut = '12345678-5'), 0);
 SELECT pg_temp.verificar('empresa 1: ve la marca de su organismo', (SELECT count(*) FROM organismo), 1);
-SELECT pg_temp.verificar('empresa 1: no ve integraciones del organismo', (SELECT count(*) FROM integracion_organismo), 0);
+SELECT pg_temp.verificar('empresa 1: no ve integraciones del organismo', (SELECT count(*) FROM integracion), 0);
 SELECT pg_temp.verificar('empresa 1: ve la investigación de C1', (SELECT count(*) FROM investigacion_accidente), 1);
 SELECT pg_temp.verificar('empresa 1: ve a la persona accidentada', (SELECT count(*) FROM persona WHERE rut = '18181818-2'), 1);
 SELECT pg_temp.verificar('empresa 1: ve causas y medidas', (SELECT count(*) FROM investigacion_causa) + (SELECT count(*) FROM investigacion_medida), 2);
@@ -309,6 +309,148 @@ SELECT pg_temp.debe_fallar('transferencia internacional sin salvaguarda',
 SELECT pg_temp.verificar('paridad: C1 no es paritario',
     (SELECT count(*) FROM v_paridad_comite v JOIN comite c ON c.id = v.comite_id
      WHERE c.nombre = 'C1' AND NOT v.es_paritario), 1);
+
+
+-- -----------------------------------------------------------------------------
+-- 3. Integraciones: empresas, centros y accesos desde el SSO del cliente
+-- -----------------------------------------------------------------------------
+RESET ROLE;
+INSERT INTO integracion (organismo_id, tipo, protocolo, estado)
+SELECT o.id, t, 'api', 'activa' FROM organismo o, unnest(ARRAY['empresas', 'centros', 'sso']::integracion_tipo[]) t
+WHERE o.nombre = 'Mutualidad A';
+INSERT INTO integracion (empresa_id, tipo, protocolo, estado)
+SELECT id, 'sso', 'oidc', 'activa' FROM empresa WHERE razon_social = 'Empresa 3';
+CREATE TEMP TABLE t_int AS
+SELECT i.id, coalesce(o.nombre, e.razon_social) AS dueno, i.tipo::text AS tipo
+FROM integracion i LEFT JOIN organismo o ON o.id = i.organismo_id LEFT JOIN empresa e ON e.id = i.empresa_id;
+GRANT SELECT ON t_int TO paritario_app;
+INSERT INTO rol_externo (integracion_id, valor, rol_id)
+SELECT t.id, x.v, x.r FROM t_int t, (VALUES ('ADMIN', 3), ('PREV', 4), ('AUD', 5)) x(v, r)
+WHERE t.dueno = 'Mutualidad A' AND t.tipo = 'sso';
+INSERT INTO rol_externo (integracion_id, valor, rol_id)
+SELECT id, 'jefe', 3 FROM t_int WHERE dueno = 'Empresa 3';
+GRANT EXECUTE ON FUNCTION importar_empresas(bigint, jsonb, text), importar_centros(bigint, jsonb, text),
+    sincronizar_accesos_sso(bigint, text, uuid, text, text[]) TO paritario_app;
+
+CREATE FUNCTION pg_temp.ultima(p_dueno text, p_tipo text) RETURNS sincronizacion
+LANGUAGE sql AS $$
+    SELECT s.* FROM sincronizacion s JOIN t_int t ON t.id = s.integracion_id
+    WHERE t.dueno = p_dueno AND t.tipo = p_tipo ORDER BY s.id DESC LIMIT 1
+$$;
+
+SELECT pg_temp.debe_fallar('rol externo equivalente a un rol de organismo',
+    $q$INSERT INTO rol_externo (integracion_id, valor, rol_id)
+       SELECT id, 'SUPER', 1 FROM t_int WHERE dueno = 'Mutualidad A' AND tipo = 'sso'$q$);
+SELECT pg_temp.debe_fallar('empresa cliente con integración de listado de empresas',
+    $q$INSERT INTO integracion (empresa_id, tipo, protocolo) SELECT id, 'empresas', 'api' FROM empresa WHERE razon_social = 'Empresa 3'$q$);
+SELECT pg_temp.debe_fallar('acceso de origen sso sin integración',
+    $q$INSERT INTO usuario_rol (usuario_id, rol_id, empresa_id, origen)
+       SELECT u.id, 5, e.id, 'sso' FROM usuario u, empresa e WHERE u.rut = '15151515-0' AND e.razon_social = 'Empresa 1'$q$);
+
+-- Las funciones las ejecuta la aplicación, sin sesión de usuario.
+SET ROLE paritario_app;
+SELECT pg_temp.debe_fallar('importar empresas con una integración de centros',
+    $q$SELECT importar_empresas((SELECT id FROM t_int WHERE dueno = 'Mutualidad A' AND tipo = 'centros'), '[{"contrato":"X"}]')$q$);
+SELECT importar_empresas((SELECT id FROM t_int WHERE dueno = 'Mutualidad A' AND tipo = 'empresas'),
+    '[{"contrato": "A-1", "rut": "76.100.200-7", "razon_social": "Empresa 1"},
+      {"contrato": "A-2", "rut": "76200300-7",   "razon_social": "Empresa 2"},
+      {"contrato": "A-9", "rut": "77777777-7",   "razon_social": "Empresa Nueva"}]');
+RESET ROLE;
+SELECT pg_temp.verificar('empresas: 1 nueva y 2 existentes con contrato',
+    (SELECT (nuevos * 10 + actualizados)::bigint FROM pg_temp.ultima('Mutualidad A', 'empresas')), 12);
+SELECT pg_temp.verificar('empresas: la nueva queda en el organismo con su contrato',
+    (SELECT count(*) FROM empresa e JOIN organismo o ON o.id = e.organismo_id
+     WHERE e.rut = '77777777-7' AND e.codigo_contrato = 'A-9' AND o.nombre = 'Mutualidad A'), 1);
+
+SET ROLE paritario_app;
+SELECT importar_empresas((SELECT id FROM t_int WHERE dueno = 'Mutualidad A' AND tipo = 'empresas'),
+    '[{"contrato": "A-1", "rut": "76100200-7", "razon_social": "Empresa 1"},
+      {"contrato": "A-2", "rut": "76200300-7", "razon_social": "Empresa 2"}]');
+RESET ROLE;
+SELECT pg_temp.verificar('empresas: sin cambios no cuenta actualizaciones y el contrato ausente queda de baja',
+    (SELECT (actualizados * 10 + bajas)::bigint FROM pg_temp.ultima('Mutualidad A', 'empresas')), 1);
+SELECT pg_temp.verificar('empresas: la baja no se borra',
+    (SELECT count(*) FROM empresa WHERE rut = '77777777-7' AND estado = 'baja'), 1);
+
+SET ROLE paritario_app;
+SELECT importar_empresas((SELECT id FROM t_int WHERE dueno = 'Mutualidad A' AND tipo = 'empresas'),
+    '[{"contrato": "A-1", "rut": "76100200-7", "razon_social": "Empresa 1"},
+      {"contrato": "A-3", "rut": "76300400-7", "razon_social": "Empresa 3"}]');
+RESET ROLE;
+SELECT pg_temp.verificar('empresas: no se apropia de un cliente directo y no aplica bajas con muchos errores',
+    (SELECT (errores * 10 + bajas)::bigint FROM pg_temp.ultima('Mutualidad A', 'empresas')), 10);
+SELECT pg_temp.verificar('empresas: Empresa 3 sigue siendo cliente directo y Empresa 2 sigue activa',
+    (SELECT count(*) FROM empresa WHERE (razon_social = 'Empresa 3' AND organismo_id IS NULL)
+                                     OR (razon_social = 'Empresa 2' AND estado = 'activo')), 2);
+
+SET ROLE paritario_app;
+SELECT importar_centros((SELECT id FROM t_int WHERE dueno = 'Mutualidad A' AND tipo = 'centros'),
+    '[{"contrato": "A-1", "codigo": "CT-1", "nombre": "Planta",  "comuna": "13101", "trabajadores": 50},
+      {"contrato": "A-1", "codigo": "CT-2", "nombre": "Bodega",  "comuna": "2101"},
+      {"contrato": "ZZ",  "codigo": "CT-9", "nombre": "Ajeno"}]');
+RESET ROLE;
+SELECT pg_temp.verificar('centros: 2 nuevos y el contrato desconocido como error',
+    (SELECT (nuevos * 10 + errores)::bigint FROM pg_temp.ultima('Mutualidad A', 'centros')), 21);
+SELECT pg_temp.verificar('centros: quedan en Empresa 1 con su comuna',
+    (SELECT count(*) FROM sucursal s JOIN empresa e ON e.id = s.empresa_id JOIN comuna c ON c.id = s.comuna_id
+     WHERE e.razon_social = 'Empresa 1' AND s.codigo_externo IN ('CT-1', 'CT-2') AND c.codigo IN ('13101', '02101')), 2);
+
+-- SSO del organismo: rol PREV (coordinador) en dos contratos.
+SET ROLE paritario_app;
+SELECT sincronizar_accesos_sso((SELECT id FROM t_int WHERE dueno = 'Mutualidad A' AND tipo = 'sso'),
+    '19.191.919-k', '00000000-0000-0000-0000-000000000001', 'PREV', ARRAY['A-1', 'A-2']);
+RESET ROLE;
+SELECT pg_temp.verificar('sso: crea el usuario activo con dos accesos de coordinador',
+    (SELECT count(*) FROM usuario u JOIN usuario_rol ur ON ur.usuario_id = u.id
+     WHERE u.rut = '19191919-K' AND u.estado = 'activo' AND ur.vigente AND ur.rol_id = 4 AND ur.origen = 'sso'), 2);
+
+-- En el siguiente ingreso el SSO trae otro rol y un solo contrato.
+SET ROLE paritario_app;
+SELECT sincronizar_accesos_sso((SELECT id FROM t_int WHERE dueno = 'Mutualidad A' AND tipo = 'sso'),
+    '19191919-K', '00000000-0000-0000-0000-000000000001', 'AUD', ARRAY['A-1', 'NO-EXISTE']);
+RESET ROLE;
+SELECT pg_temp.verificar('sso: revoca lo anterior y deja solo auditor en Empresa 1',
+    (SELECT count(*) FROM usuario u JOIN usuario_rol ur ON ur.usuario_id = u.id JOIN empresa e ON e.id = ur.empresa_id
+     WHERE u.rut = '19191919-K' AND ur.vigente), 1);
+SELECT pg_temp.verificar('sso: el acceso vigente es auditor de Empresa 1',
+    (SELECT count(*) FROM usuario u JOIN usuario_rol ur ON ur.usuario_id = u.id JOIN empresa e ON e.id = ur.empresa_id
+     WHERE u.rut = '19191919-K' AND ur.vigente AND ur.rol_id = 5 AND e.razon_social = 'Empresa 1'), 1);
+SELECT set_config('app.usuario_id', (SELECT id::text FROM usuario WHERE rut = '19191919-K'), true);
+SET ROLE paritario_app;
+SELECT pg_temp.verificar('sso: con ese acceso solo ve Empresa 1', (SELECT count(*) FROM empresa), 1);
+RESET ROLE;
+SELECT set_config('app.usuario_id', '', true);
+
+-- Un rol externo desconocido revoca los accesos sso, pero no los asignados a mano.
+SET ROLE paritario_app;
+SELECT sincronizar_accesos_sso((SELECT id FROM t_int WHERE dueno = 'Mutualidad A' AND tipo = 'sso'),
+    '15151515-0', '00000000-0000-0000-0000-000000000002', 'DESCONOCIDO', ARRAY['A-1']);
+RESET ROLE;
+SELECT pg_temp.verificar('sso: el acceso manual del administrador de Empresa 1 se mantiene',
+    (SELECT count(*) FROM usuario u JOIN usuario_rol ur ON ur.usuario_id = u.id
+     WHERE u.rut = '15151515-0' AND ur.vigente AND ur.origen = 'manual'), 1);
+
+-- SSO de una empresa cliente: el contrato se ignora, solo da acceso a esa empresa.
+SET ROLE paritario_app;
+SELECT sincronizar_accesos_sso((SELECT id FROM t_int WHERE dueno = 'Empresa 3'),
+    '13131313-6', '00000000-0000-0000-0000-000000000003', 'jefe', ARRAY['A-1']);
+RESET ROLE;
+SELECT pg_temp.verificar('sso de empresa: administrador solo de Empresa 3',
+    (SELECT count(*) FROM usuario u JOIN usuario_rol ur ON ur.usuario_id = u.id JOIN empresa e ON e.id = ur.empresa_id
+     WHERE u.rut = '13131313-6' AND ur.vigente AND ur.rol_id = 3 AND e.razon_social = 'Empresa 3'), 1);
+SELECT pg_temp.verificar('sso de empresa: ningún acceso fuera de Empresa 3',
+    (SELECT count(*) FROM usuario u JOIN usuario_rol ur ON ur.usuario_id = u.id JOIN empresa e ON e.id = ur.empresa_id
+     WHERE u.rut = '13131313-6' AND ur.vigente AND e.razon_social <> 'Empresa 3'), 0);
+
+UPDATE usuario SET estado = 'bloqueado' WHERE rut = '16161616-8';
+SET ROLE paritario_app;
+SELECT pg_temp.debe_fallar('ingreso por SSO de una cuenta bloqueada',
+    $q$SELECT sincronizar_accesos_sso((SELECT id FROM t_int WHERE dueno = 'Mutualidad A' AND tipo = 'sso'),
+       '16161616-8', '00000000-0000-0000-0000-000000000004', 'PREV', ARRAY['A-1'])$q$);
+SELECT pg_temp.debe_fallar('mismo RUT con otra cuenta de Cognito',
+    $q$SELECT sincronizar_accesos_sso((SELECT id FROM t_int WHERE dueno = 'Mutualidad A' AND tipo = 'sso'),
+       '19191919-K', '00000000-0000-0000-0000-000000000009', 'PREV', ARRAY['A-1'])$q$);
+RESET ROLE;
 
 \echo 'Todas las verificaciones pasaron.'
 ROLLBACK;

@@ -23,8 +23,9 @@ La API corre en **AWS Lambda**, sin balanceador ni servidores encendidos: solo c
 | `api.tf` | Repositorio ECR y las funciones `api` y `trabajos`, con sus permisos |
 | `carga.tf` | Tarea ECS de un solo uso para cargar la base |
 | `front.tf` | CloudFront con encabezados de seguridad; `/api/*` va a la función firmando cada solicitud |
-| `identidad.tf` | Cognito: usuario = RUT, MFA opcional, altas solo por administrador |
+| `identidad.tf` | Cognito: usuario = RUT, MFA opcional, altas solo por administrador; inicio de sesión de clientes (SAML u OIDC) |
 | `correo.tf` | Identidad de SES con DKIM (si se define `dominio_correo`) |
+| `integraciones.tf` | Sincronización diaria de empresas y centros desde los servicios de clientes y organismos |
 | `costos.tf` | Presupuesto con alertas por correo |
 | `horario.tf` | Encendido y apagado programado de la base (hora de Chile) |
 
@@ -130,6 +131,68 @@ aws cloudfront create-invalidation --distribution-id "$(terraform -chdir=infra o
 
 **Concurrencia.** Las cuentas nuevas parten con un máximo de 10 ejecuciones simultáneas de Lambda en total, lo que de paso protege a la base pequeña. Si AWS amplía la cuota (Service Quotas → Lambda → *Concurrent executions*), fije `api_concurrencia` (por ejemplo, 20) para que la API nunca abra más conexiones de las que la base aguanta.
 
+## Integraciones con clientes y organismos
+
+Un organismo (marca blanca) o una empresa cliente puede conectar tres servicios suyos. Cada integración se registra en la tabla `integracion` de la base, con su dueño, y queda activa o en prueba.
+
+| Servicio | Quién | Qué hace Paritario |
+| --- | --- | --- |
+| Inicio de sesión (SSO) | Organismo o empresa | En cada ingreso concilia los accesos: crea los que corresponden y revoca los que ya no vienen |
+| Empresas o contratos | Organismo | Cada día crea y actualiza sus empresas, y da de baja los contratos que dejaron de venir |
+| Centros de trabajo | Organismo o empresa | Cada día crea y actualiza los centros por contrato, y marca como no vigentes los que dejaron de venir |
+
+Nada se borra: las bajas se marcan. Cada carga queda en la tabla `sincronizacion` con nuevos, actualizados, bajas y errores (sin datos personales). Si más del 10 % de las filas trae errores, no se aplican bajas, para no vaciar un cliente por un listado defectuoso.
+
+**Contrato.** Es el número de adherente o de contrato con que el organismo identifica a cada empresa (`empresa.codigo_contrato`), uno por empresa. Une el SSO con las empresas, y los centros con su empresa.
+
+### Inicio de sesión del cliente
+
+Su sistema (SAML u OIDC) debe enviar en cada ingreso el **RUT**, el **rol** (con su propio código) y, si es un organismo, los **contratos** del usuario. Cada rol externo equivale a uno de los tres roles de empresa: administrador, coordinador o auditor (tabla `rol_externo`). Un rol sin equivalencia no da acceso.
+
+1. Defina un dominio propio (`dominio`): la dirección de retorno `https://<dominio>/auth/callback` se registra en el sistema del cliente.
+2. Agregue el proveedor en `terraform.tfvars` y aplique:
+
+```hcl
+proveedores_identidad = {
+  mutual-a = {
+    tipo         = "SAML"
+    metadata_url = "https://idp.mutual-a.cl/metadata.xml"
+    atributos    = { rut = "rut", rol = "perfil", contratos = "contratos" }
+  }
+}
+```
+
+3. Entregue al cliente los datos de Paritario como proveedor de servicio. Para SAML, la URL de respuesta es `https://<dominio Cognito>/saml2/idpresponse` y el identificador es `urn:amazon:cognito:sp:<cognito_user_pool_id>`. El dominio de Cognito está en la variable `COGNITO_DOMINIO` de la API.
+4. Registre la integración en la base (`integracion` de tipo `sso`, con `configuracion = {"proveedor": "mutual-a"}`) y sus equivalencias de rol en `rol_externo`.
+
+En OIDC, `client_secret` queda en el estado de Terraform: protéjalo como se indica en "Estado de Terraform".
+
+### Servicios de empresas y centros
+
+1. Guarde las credenciales del servicio en Secrets Manager, bajo el prefijo de integraciones. La función de trabajos solo puede leer ese prefijo:
+
+```bash
+aws secretsmanager create-secret --name "paritario-piloto/integraciones/mutual-a-empresas" --secret-string '{"url": "https://api.mutual-a.cl/adherentes", "token": "…"}'
+```
+
+2. Registre la integración en la base: tipo `empresas` o `centros`, `secreto_ref` con el nombre del secreto y estado `activa`.
+
+La sincronización corre a las 07:30, hora de Chile, cuando la base está encendida en cualquier horario. Para probarla a mano:
+
+```bash
+aws lambda invoke --function-name "$(terraform -chdir=infra output -raw api_funcion)" --payload '{"tipo":"sincronizar"}' --cli-binary-format raw-in-base64-out /dev/stdout
+```
+
+### Qué implementa la aplicación
+
+- **`POST /interno/eventos`** en la API (Lambda Web Adapter entrega ahí los eventos que no son HTTP; CloudFront no expone esa ruta):
+  - `{"tipo": "sincronizar"}`: por cada integración activa de empresas o centros, deja un trabajo en `trabajos/`.
+  - Evento de S3 en `importaciones/`: lee el JSON y llama a `importar_empresas()` o `importar_centros()` en la base; luego borra el archivo.
+- **Función de trabajos**: para un trabajo de sincronización, lee el secreto, consulta el servicio del cliente, convierte la respuesta al formato de la base y la deja en `importaciones/<integracion>/<fecha>.json`.
+- **Ingreso por SSO**: si el token de Cognito viene de un proveedor de cliente, la API llama a `sincronizar_accesos_sso()` con `custom:rut`, `custom:rol_externo` y `custom:contratos` antes de atender la solicitud.
+
+Los formatos de entrada están en los comentarios de esas funciones, en `db/schema.sql`.
+
 ## Dominio propio (opcional)
 
 Sin dominio, la aplicación queda en `https://xxxx.cloudfront.net` (salida `url`). Para usar un dominio propio:
@@ -198,7 +261,7 @@ checkov -d infra --framework terraform
 
 ## Pruebas
 
-`tests/piloto.tftest.hcl` prueba la configuración con un proveedor simulado, sin cuenta de AWS ni costo: el piloto sin aplicación, la API en Lambda con horario de días hábiles (red, permisos, variables sin claves, origen de CloudFront, trabajos), el horario de fines de semana, el dominio propio con correo y el rechazo de configuraciones inválidas.
+`tests/piloto.tftest.hcl` prueba la configuración con un proveedor simulado, sin cuenta de AWS ni costo: el piloto sin aplicación, la API en Lambda con horario de días hábiles (red, permisos, variables sin claves, origen de CloudFront, trabajos), el horario de fines de semana, el dominio propio con correo, el inicio de sesión de clientes (SAML y OIDC) y el rechazo de configuraciones inválidas.
 
 ```bash
 terraform -chdir=infra init -backend=false

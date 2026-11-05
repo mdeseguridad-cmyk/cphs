@@ -15,10 +15,10 @@ Este repositorio contiene, por ahora, el diseño del producto, el esquema de bas
 | --- | --- |
 | [`docs/especificacion-funcional.md`](docs/especificacion-funcional.md) | Especificación funcional: módulos, roles, requisitos, cumplimiento, roadmap, costos, comparación de nubes y oferta para organismos |
 | [`docs/prototipo.html`](docs/prototipo.html) | Prototipo navegable con datos de ejemplo: perfil de organismo en marca blanca, investigación de accidentes con códigos SISESAT reales e invitación de usuarios |
-| [`docs/modelo-datos.html`](docs/modelo-datos.html) | Modelo de datos v5.5: diagrama entidad-relación y las 38 tablas |
+| [`docs/modelo-datos.html`](docs/modelo-datos.html) | Modelo de datos v5.6: diagrama entidad-relación y las 40 tablas |
 | [`docs/anexo-privacidad.html`](docs/anexo-privacidad.html) | Anexo de privacidad según la Ley 21.719 |
 | [`docs/arquitectura-aws.html`](docs/arquitectura-aws.html) | Arquitectura de referencia en AWS |
-| [`db/schema.sql`](db/schema.sql) | Esquema PostgreSQL 16: 38 tablas, restricciones y seguridad por fila |
+| [`db/schema.sql`](db/schema.sql) | Esquema PostgreSQL 16: 40 tablas, restricciones, seguridad por fila y funciones de integración con clientes (empresas, centros y accesos por SSO) |
 | [`db/seed.sql`](db/seed.sql) | Catálogos base: regiones, organismos administradores con su código SUSESO, roles y niveles de certificación generales |
 | [`db/seed_comunas.sql`](db/seed_comunas.sql) | Las 346 comunas con su código único territorial (CUT) vigente desde 2018 |
 | [`db/seed_actividades.sql`](db/seed_actividades.sql) | Las 21 secciones del CIIU4.CL 2012 y los 674 códigos de actividad económica del SII, verificados contra la tabla oficial de homologación |
@@ -46,7 +46,7 @@ Para verificar el aislamiento y las reglas de negocio sobre una base de prueba (
 psql -d paritario -v ON_ERROR_STOP=1 -f db/test_rls.sql
 ```
 
-Debe terminar con `Todas las verificaciones pasaron.` Son 74 verificaciones; cualquier falla aborta el script con un mensaje `FALLA: …`.
+Debe terminar con `Todas las verificaciones pasaron.` Son 95 verificaciones; cualquier falla aborta el script con un mensaje `FALLA: …`.
 
 ### Cómo funciona el aislamiento
 

@@ -22,3 +22,11 @@ horario = "siempre"
 # certificado_cloudfront_arn = "arn:aws:acm:us-east-1:123456789012:certificate/..."
 # dominio_correo             = "paritario.cl"
 
+# Inicio de sesión de clientes u organismos (requiere dominio). Ver README.md.
+# proveedores_identidad = {
+#   mutual-a = {
+#     tipo         = "SAML"
+#     metadata_url = "https://idp.mutual-a.cl/metadata.xml"
+#     atributos    = { rut = "rut", rol = "perfil", contratos = "contratos" }
+#   }
+# }

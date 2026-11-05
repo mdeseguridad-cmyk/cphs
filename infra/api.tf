@@ -5,18 +5,23 @@
 #              de función, firmada (OAC); nadie más puede invocarla. Llega a
 #              la base y a S3, y a nada más.
 #   trabajos   fuera de la VPC. Hace lo que necesita internet: enviar
-#              correos (SES) y administrar usuarios (Cognito). La API le
-#              deja trabajos en s3://operaciones/trabajos/ y S3 la invoca.
+#              correos (SES), administrar usuarios (Cognito) y consultar los
+#              servicios de empresas y centros de clientes y organismos. La
+#              API le deja trabajos en s3://operaciones/trabajos/ y S3 la
+#              invoca; los resultados de los servicios vuelven a la API por
+#              s3://operaciones/importaciones/ (integraciones.tf).
 #
 # Mientras no exista la imagen de la aplicación (var.api_imagen vacía), las
 # funciones no se crean y CloudFront solo sirve el front.
 
 locals {
-  con_api          = var.api_imagen != ""
-  prefijo_trabajos = "trabajos/"
-  db_usuario_app   = "paritario_app"
-  cognito_emisor   = "https://cognito-idp.${var.region}.amazonaws.com/${aws_cognito_user_pool.principal.id}"
-  correo_remitente = var.dominio_correo != "" ? "notificaciones@${var.dominio_correo}" : ""
+  con_api               = var.api_imagen != ""
+  prefijo_trabajos      = "trabajos/"
+  prefijo_importaciones = "importaciones/"
+  prefijo_secretos      = "${local.nombre}/integraciones/"
+  db_usuario_app        = "paritario_app"
+  cognito_emisor        = "https://cognito-idp.${var.region}.amazonaws.com/${aws_cognito_user_pool.principal.id}"
+  correo_remitente      = var.dominio_correo != "" ? "notificaciones@${var.dominio_correo}" : ""
 
   entorno_comun = {
     AWS_LWA_PORT                 = tostring(var.api_puerto)
@@ -24,6 +29,9 @@ locals {
     DOCUMENTOS_BUCKET            = aws_s3_bucket.b["documentos"].bucket
     OPERACIONES_BUCKET           = aws_s3_bucket.b["operaciones"].bucket
     TRABAJOS_PREFIJO             = local.prefijo_trabajos
+    IMPORTACIONES_PREFIJO        = local.prefijo_importaciones
+    INTEGRACIONES_SECRETOS       = local.prefijo_secretos
+    COGNITO_DOMINIO              = local.federado ? "https://${aws_cognito_user_pool_domain.principal[0].domain}.auth.${var.region}.amazoncognito.com" : ""
     COGNITO_USER_POOL_ID         = aws_cognito_user_pool.principal.id
     COGNITO_CLIENT_ID            = aws_cognito_user_pool_client.spa.id
     COGNITO_EMISOR               = local.cognito_emisor
@@ -129,6 +137,11 @@ data "aws_iam_policy_document" "api" {
     actions   = ["s3:PutObject"]
     resources = ["${aws_s3_bucket.b["operaciones"].arn}/${local.prefijo_trabajos}*"]
   }
+  statement {
+    sid       = "LeerImportaciones"
+    actions   = ["s3:GetObject", "s3:DeleteObject"]
+    resources = ["${aws_s3_bucket.b["operaciones"].arn}/${local.prefijo_importaciones}*"]
+  }
 }
 
 resource "aws_iam_role_policy" "api" {
@@ -154,6 +167,16 @@ data "aws_iam_policy_document" "trabajos" {
     sid       = "LeerTrabajos"
     actions   = ["s3:GetObject", "s3:DeleteObject"]
     resources = ["${aws_s3_bucket.b["operaciones"].arn}/${local.prefijo_trabajos}*"]
+  }
+  statement {
+    sid       = "DejarImportaciones"
+    actions   = ["s3:PutObject"]
+    resources = ["${aws_s3_bucket.b["operaciones"].arn}/${local.prefijo_importaciones}*"]
+  }
+  statement {
+    sid       = "CredencialesDeClientes"
+    actions   = ["secretsmanager:GetSecretValue"]
+    resources = ["arn:aws:secretsmanager:${var.region}:${data.aws_caller_identity.actual.account_id}:secret:${local.prefijo_secretos}*"]
   }
   statement {
     sid       = "AdjuntarDocumentos"
@@ -223,6 +246,9 @@ resource "aws_lambda_function" "api" {
       DB_USER    = local.db_usuario_app
       DB_AUTH    = "iam"
       DB_SSLMODE = "verify-full"
+      # Eventos que no son HTTP (programación diaria, importaciones desde S3)
+      # llegan a la aplicación como POST a esta ruta, que CloudFront no expone.
+      AWS_LWA_PASS_THROUGH_PATH = "/interno/eventos"
     })
   }
 
@@ -293,7 +319,19 @@ resource "aws_lambda_permission" "s3_trabajos" {
   source_account = data.aws_caller_identity.actual.account_id
 }
 
-resource "aws_s3_bucket_notification" "trabajos" {
+resource "aws_lambda_permission" "s3_importaciones" {
+  count          = local.con_api ? 1 : 0
+  statement_id   = "S3Importaciones"
+  action         = "lambda:InvokeFunction"
+  function_name  = aws_lambda_function.api[0].function_name
+  principal      = "s3.amazonaws.com"
+  source_arn     = aws_s3_bucket.b["operaciones"].arn
+  source_account = data.aws_caller_identity.actual.account_id
+}
+
+# Un bucket tiene una sola configuración de notificaciones: trabajos van a la
+# función de trabajos; importaciones, a la API (que escribe en la base).
+resource "aws_s3_bucket_notification" "operaciones" {
   count  = local.con_api ? 1 : 0
   bucket = aws_s3_bucket.b["operaciones"].id
   lambda_function {
@@ -301,5 +339,10 @@ resource "aws_s3_bucket_notification" "trabajos" {
     events              = ["s3:ObjectCreated:*"]
     filter_prefix       = local.prefijo_trabajos
   }
-  depends_on = [aws_lambda_permission.s3_trabajos]
+  lambda_function {
+    lambda_function_arn = aws_lambda_function.api[0].arn
+    events              = ["s3:ObjectCreated:*"]
+    filter_prefix       = local.prefijo_importaciones
+  }
+  depends_on = [aws_lambda_permission.s3_trabajos, aws_lambda_permission.s3_importaciones]
 }

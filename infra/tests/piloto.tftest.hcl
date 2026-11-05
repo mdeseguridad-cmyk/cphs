@@ -156,8 +156,24 @@ run "con_aplicacion_y_dias_habiles" {
     error_message = "/api/* debe ir a la función."
   }
   assert {
-    condition     = aws_s3_bucket_notification.trabajos[0].lambda_function[0].filter_prefix == "trabajos/"
-    error_message = "Los trabajos se leen desde el prefijo trabajos/."
+    condition     = toset([for f in aws_s3_bucket_notification.operaciones[0].lambda_function : f.filter_prefix]) == toset(["trabajos/", "importaciones/"])
+    error_message = "S3 debe avisar de trabajos (a la función de trabajos) e importaciones (a la API)."
+  }
+  assert {
+    condition     = one([for f in aws_s3_bucket_notification.operaciones[0].lambda_function : f.lambda_function_arn if f.filter_prefix == "importaciones/"]) == aws_lambda_function.api[0].arn
+    error_message = "Las importaciones las procesa la API, que es la única que llega a la base."
+  }
+  assert {
+    condition     = aws_scheduler_schedule.sincronizacion[0].schedule_expression == "cron(30 7 ? * MON-FRI *)"
+    error_message = "Con días hábiles, la sincronización corre de lunes a viernes, con la base encendida."
+  }
+  assert {
+    condition     = jsondecode(aws_scheduler_schedule.sincronizacion[0].target[0].input).tipo == "sincronizar"
+    error_message = "La programación debe pedir la sincronización a la API."
+  }
+  assert {
+    condition     = length(aws_cognito_identity_provider.cliente) == 0 && length(aws_cognito_user_pool_domain.principal) == 0
+    error_message = "Sin proveedores de clientes no hay federación ni dominio de Cognito."
   }
   assert {
     condition     = length(aws_scheduler_schedule.horario) == 2
@@ -213,6 +229,86 @@ run "dominio_propio_con_correo" {
     condition     = output.url == "https://app.paritario.cl"
     error_message = "La URL debe usar el dominio propio."
   }
+}
+
+run "inicio_de_sesion_de_clientes" {
+  command = apply
+  variables {
+    api_imagen                 = "123456789012.dkr.ecr.sa-east-1.amazonaws.com/paritario-piloto-api:1.0.0"
+    dominio                    = "app.paritario.cl"
+    certificado_cloudfront_arn = "arn:aws:acm:us-east-1:123456789012:certificate/simulado"
+    proveedores_identidad = {
+      mutual-a = {
+        tipo         = "SAML"
+        metadata_url = "https://idp.mutual-a.cl/metadata.xml"
+        atributos    = { rut = "rut", rol = "perfil", contratos = "contratos" }
+      }
+      empresa-x = {
+        tipo          = "OIDC"
+        emisor        = "https://login.empresa-x.cl"
+        client_id     = "paritario"
+        client_secret = "simulado"
+        atributos     = { rut = "rut_trabajador", rol = "cargo" }
+      }
+    }
+  }
+
+  assert {
+    condition     = length(aws_cognito_identity_provider.cliente) == 2 && length(aws_cognito_user_pool_domain.principal) == 1
+    error_message = "Cada proveedor de cliente se federa en Cognito, con su dominio."
+  }
+  assert {
+    condition     = nonsensitive(aws_cognito_identity_provider.cliente["mutual-a"].attribute_mapping["custom:rut"]) == "rut" && nonsensitive(aws_cognito_identity_provider.cliente["mutual-a"].attribute_mapping["custom:contratos"]) == "contratos"
+    error_message = "El RUT y los contratos del cliente deben quedar en los atributos propios."
+  }
+  assert {
+    condition     = !contains(keys(nonsensitive(aws_cognito_identity_provider.cliente["empresa-x"].attribute_mapping)), "custom:contratos")
+    error_message = "Si el cliente no envía contratos, el atributo no se mapea."
+  }
+  assert {
+    condition     = contains(aws_cognito_user_pool_client.spa.supported_identity_providers, "mutual-a") && contains(aws_cognito_user_pool_client.spa.supported_identity_providers, "COGNITO")
+    error_message = "El front debe ofrecer los proveedores de clientes y el inicio de sesión propio."
+  }
+  assert {
+    condition     = aws_cognito_user_pool_client.spa.callback_urls == toset(["https://app.paritario.cl/auth/callback"])
+    error_message = "La dirección de retorno usa el dominio propio."
+  }
+  assert {
+    condition     = startswith(aws_lambda_function.api[0].environment[0].variables["COGNITO_DOMINIO"], "https://paritario-piloto-")
+    error_message = "La API debe conocer el dominio de Cognito."
+  }
+  assert {
+    condition     = aws_scheduler_schedule.sincronizacion[0].schedule_expression == "cron(30 7 * * ? *)"
+    error_message = "Con la base siempre encendida, la sincronización corre todos los días."
+  }
+}
+
+run "inicio_de_sesion_de_cliente_sin_dominio_es_rechazado" {
+  command = plan
+  variables {
+    proveedores_identidad = {
+      mutual-a = {
+        tipo         = "SAML"
+        metadata_url = "https://idp.mutual-a.cl/metadata.xml"
+        atributos    = { rut = "rut", rol = "perfil" }
+      }
+    }
+  }
+  expect_failures = [aws_cognito_identity_provider.cliente]
+}
+
+run "proveedor_oidc_incompleto_es_rechazado" {
+  command = plan
+  variables {
+    proveedores_identidad = {
+      empresa-x = {
+        tipo      = "OIDC"
+        emisor    = "https://login.empresa-x.cl"
+        atributos = { rut = "rut", rol = "cargo" }
+      }
+    }
+  }
+  expect_failures = [var.proveedores_identidad]
 }
 
 run "tiempo_maximo_fuera_de_rango_es_rechazado" {
