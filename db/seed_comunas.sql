@@ -4,20 +4,21 @@
 -- id = código único territorial (CUT) vigente desde la creación de la Región
 -- de Ñuble (Ley 21.033, septiembre de 2018).
 --
--- Origen: el sitio de la SUBDERE no fue accesible desde el entorno donde se
--- generó este archivo, así que se armó cruzando dos copias públicas de la
--- tabla oficial:
---   - chilemapas (github.com/pachadotdev/chilemapas, data/codigos_territoriales):
---     códigos vigentes, incluidos los de Ñuble (16101–16305). Nombres sin tildes.
---   - bdcut-cl (github.com/knxroot/bdcut-cl, BD/CSV_utf8): nombres con tildes.
---     Conserva para Ñuble los códigos anteriores a 2018 (8401–8421), que aquí
---     NO se usan.
--- Ambas fuentes coinciden en código, provincia y región en las otras 325
--- comunas. Difieren en la grafía de 5 nombres; aquí se usa la de bdcut-cl
--- (entre paréntesis, la de chilemapas):
---   4105 Paihuano (Paiguano), 5502 La Calera (Calera), 5703 Llay Llay
---   (Llaillay), 11101 Coyhaique (Coihaique), 11201 Aysén (Aisen).
--- Pendiente: confirmar esas 5 grafías contra la planilla oficial de la SUBDERE.
+-- Origen y verificación:
+--   - Base: tabla oficial "Código Único Territorial" de la SUBDERE (versión de
+--     febrero de 2008). Coincide en código y nombre con este archivo en las
+--     321 comunas que no cambiaron después de 2008.
+--   - Cambios posteriores a 2008, ya aplicados aquí:
+--       * Provincia de Marga Marga (2010): Quilpué, Villa Alemana, Limache y
+--         Olmué pasan de 5106/5108/5505/5507 a 5801–5804.
+--       * Región de Ñuble (2018): sus 21 comunas pasan de 8401–8421 a
+--         16101–16305.
+--   - Códigos vigentes tomados de chilemapas (github.com/pachadotdev/chilemapas),
+--     que reproduce la tabla de la SUBDERE de 2018; tildes tomadas de
+--     bdcut-cl (github.com/knxroot/bdcut-cl).
+--   - Nombres: se usa la grafía oficial de la SUBDERE (Paiguano, Calera,
+--     Llaillay, Coihaique, Aisén, Padre Las Casas), con tilde en mayúscula
+--     según la norma actual (Los Álamos, Los Ángeles).
 -- =============================================================================
 
 BEGIN;
@@ -53,7 +54,7 @@ INSERT INTO comuna (id, region_id, nombre) VALUES
     (4102, 4, 'Coquimbo'),
     (4103, 4, 'Andacollo'),
     (4104, 4, 'La Higuera'),
-    (4105, 4, 'Paihuano'),
+    (4105, 4, 'Paiguano'),
     (4106, 4, 'Vicuña'),
     (4201, 4, 'Illapel'),
     (4202, 4, 'Canela'),
@@ -82,7 +83,7 @@ INSERT INTO comuna (id, region_id, nombre) VALUES
     (5404, 5, 'Petorca'),
     (5405, 5, 'Zapallar'),
     (5501, 5, 'Quillota'),
-    (5502, 5, 'La Calera'),
+    (5502, 5, 'Calera'),
     (5503, 5, 'Hijuelas'),
     (5504, 5, 'La Cruz'),
     (5506, 5, 'Nogales'),
@@ -94,7 +95,7 @@ INSERT INTO comuna (id, region_id, nombre) VALUES
     (5606, 5, 'Santo Domingo'),
     (5701, 5, 'San Felipe'),
     (5702, 5, 'Catemu'),
-    (5703, 5, 'Llay Llay'),
+    (5703, 5, 'Llaillay'),
     (5704, 5, 'Panquehue'),
     (5705, 5, 'Putaendo'),
     (5706, 5, 'Santa María'),
@@ -209,7 +210,7 @@ INSERT INTO comuna (id, region_id, nombre) VALUES
     (9109, 9, 'Loncoche'),
     (9110, 9, 'Melipeuco'),
     (9111, 9, 'Nueva Imperial'),
-    (9112, 9, 'Padre las Casas'),
+    (9112, 9, 'Padre Las Casas'),
     (9113, 9, 'Perquenco'),
     (9114, 9, 'Pitrufquén'),
     (9115, 9, 'Pucón'),
@@ -260,9 +261,9 @@ INSERT INTO comuna (id, region_id, nombre) VALUES
     (10402, 10, 'Futaleufú'),
     (10403, 10, 'Hualaihué'),
     (10404, 10, 'Palena'),
-    (11101, 11, 'Coyhaique'),
+    (11101, 11, 'Coihaique'),
     (11102, 11, 'Lago Verde'),
-    (11201, 11, 'Aysén'),
+    (11201, 11, 'Aisén'),
     (11202, 11, 'Cisnes'),
     (11203, 11, 'Guaitecas'),
     (11301, 11, 'Cochrane'),

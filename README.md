@@ -76,6 +76,5 @@ Las vistas `v_cumplimiento_reuniones` y `v_paridad_comite` calculan el cumplimie
 
 ### Pendiente en la base de datos
 
-- Confirmar contra la planilla oficial de la SUBDERE la grafía de 5 comunas que difiere entre las fuentes usadas (detalle en la cabecera de `db/seed_comunas.sql`).
 - Definir los plazos de `politica_retencion` con asesoría legal.
 - Las funciones de ámbito devuelven arreglos de ids; con miles de empresas por organismo conviene revisar su rendimiento con datos reales.

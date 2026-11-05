@@ -21,7 +21,7 @@ INSERT INTO region (id, nombre, orden) VALUES
     (9,  'La Araucanía', 12),
     (14, 'Los Ríos', 13),
     (10, 'Los Lagos', 14),
-    (11, 'Aysén del General Carlos Ibáñez del Campo', 15),
+    (11, 'Aisén del General Carlos Ibáñez del Campo', 15),
     (12, 'Magallanes y de la Antártica Chilena', 16);
 
 -- Comunas: en db/seed_comunas.sql (346 comunas con su código único territorial).

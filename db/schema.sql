@@ -141,19 +141,25 @@ COMMENT ON COLUMN integracion_organismo.configuracion IS 'Parámetros sin secret
 
 CREATE TABLE region (
     id      smallint PRIMARY KEY,
+    codigo  char(2) GENERATED ALWAYS AS (lpad(id::text, 2, '0')) STORED,
     nombre  varchar(60) NOT NULL UNIQUE,
     orden   smallint    NOT NULL UNIQUE
 );
 COMMENT ON TABLE  region IS 'Catálogo de regiones de Chile. id = número oficial de la región.';
+COMMENT ON COLUMN region.codigo IS 'Código en el formato oficial: 2 dígitos con cero inicial (01).';
 COMMENT ON COLUMN region.orden IS 'Orden geográfico de norte a sur.';
 
 CREATE TABLE comuna (
     id         int PRIMARY KEY,
+    codigo     char(5) GENERATED ALWAYS AS (lpad(id::text, 5, '0')) STORED,
     region_id  smallint NOT NULL REFERENCES region(id),
     nombre     varchar(90) NOT NULL,
-    UNIQUE (region_id, nombre)
+    UNIQUE (region_id, nombre),
+    -- Los dos primeros dígitos del código territorial son los de la región.
+    CHECK (id / 1000 = region_id)
 );
-COMMENT ON TABLE  comuna IS 'Catálogo de comunas. id = código único territorial (CUT).';
+COMMENT ON TABLE  comuna IS 'Catálogo de comunas. id = código único territorial (CUT) vigente.';
+COMMENT ON COLUMN comuna.codigo IS 'Código en el formato oficial de la SUBDERE: 5 dígitos con cero inicial (01101).';
 
 CREATE TABLE empresa (
     id                       bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
