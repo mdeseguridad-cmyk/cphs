@@ -1,0 +1,405 @@
+<!doctype html>
+<html lang="es">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<style>body{margin:0}[hidden]{display:none!important}</style>
+<meta name="claude:viewport-fit-sides" content="cover">
+<title>Modelo de Datos · Comités Paritarios</title>
+<style>
+  /* Reference sheet: ER diagram + per-table field specs, grouped by domain. */
+  :root{
+    --bg:#eef1f3; --surface:#ffffff; --surface-2:#f4f7f8; --border:#dde3e6; --border-strong:#c6d0d4;
+    --fg:#131a1e; --muted:#566368; --faint:#869298;
+    --accent:#0f766e; --accent-soft:#d7ece9;
+    --pk:#9a3412; --pk-soft:#f6e3d6; --fk:#1d4ed8; --fk-soft:#dde6fb; --uq:#6b21a8; --uq-soft:#ece0f7;
+    --new:#0f766e; --new-soft:#cdeae6;
+    --shadow:0 1px 2px rgba(16,30,36,.06),0 3px 12px rgba(16,30,36,.05);
+    --f-display:"Archivo","Segoe UI",system-ui,sans-serif;
+    --f-body:"Public Sans","Segoe UI",system-ui,sans-serif;
+    --f-mono:"IBM Plex Mono",ui-monospace,monospace;
+    color-scheme:light;
+  }
+  @media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+    --bg:#0c1114; --surface:#141b1f; --surface-2:#1a2328; --border:#28343a; --border-strong:#3a4a52;
+    --fg:#e8eef1; --muted:#9db0b8; --faint:#6b7d85;
+    --accent:#2dd4bf; --accent-soft:#113b38;
+    --pk:#fb923c; --pk-soft:#3a2510; --fk:#93b4fd; --fk-soft:#14233f; --uq:#d8b4fe; --uq-soft:#2a1740;
+    --new:#5eead4; --new-soft:#0f3b36;
+    --shadow:0 1px 2px rgba(0,0,0,.4),0 3px 14px rgba(0,0,0,.35);
+    color-scheme:dark;
+  }}
+  :root[data-theme="dark"]{
+    --bg:#0c1114; --surface:#141b1f; --surface-2:#1a2328; --border:#28343a; --border-strong:#3a4a52;
+    --fg:#e8eef1; --muted:#9db0b8; --faint:#6b7d85;
+    --accent:#2dd4bf; --accent-soft:#113b38;
+    --pk:#fb923c; --pk-soft:#3a2510; --fk:#93b4fd; --fk-soft:#14233f; --uq:#d8b4fe; --uq-soft:#2a1740;
+    --new:#5eead4; --new-soft:#0f3b36;
+    --shadow:0 1px 2px rgba(0,0,0,.4),0 3px 14px rgba(0,0,0,.35);
+    color-scheme:dark;
+  }
+  *{box-sizing:border-box}
+  body{background:var(--bg);color:var(--fg);font-family:var(--f-body);line-height:1.55;-webkit-font-smoothing:antialiased}
+  .page{width:100%;max-width:1040px;margin:0 auto;padding:28px max(16px,env(safe-area-inset-right,0)) 64px max(16px,env(safe-area-inset-left,0))}
+  h1,h2,h3{font-family:var(--f-display);margin:0;letter-spacing:-.015em;text-wrap:balance}
+  .mono{font-family:var(--f-mono)}
+
+  header.hero{border-bottom:1px solid var(--border);padding-bottom:22px;margin-bottom:26px}
+  .eyebrow{font-size:11.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--accent);font-weight:700}
+  header.hero h1{font-size:30px;margin:8px 0 6px}
+  header.hero p{margin:0;color:var(--muted);font-size:14.5px;max-width:70ch}
+  .toolbar{display:flex;gap:10px;flex-wrap:wrap;margin-top:16px;align-items:center}
+  .legend{display:flex;gap:8px;flex-wrap:wrap}
+  .lg{display:inline-flex;align-items:center;gap:6px;font-size:11.5px;font-weight:600;color:var(--muted)}
+  .kbadge{font-family:var(--f-mono);font-size:10px;font-weight:700;padding:2px 6px;border-radius:5px}
+  .kpk{background:var(--pk-soft);color:var(--pk)} .kfk{background:var(--fk-soft);color:var(--fk)} .kuq{background:var(--uq-soft);color:var(--uq)}
+  .themebtn{margin-left:auto;width:36px;height:36px;border-radius:9px;border:1px solid var(--border);background:var(--surface);color:var(--muted);cursor:pointer;display:grid;place-items:center}
+
+  section{margin-top:34px}
+  .sec-h{display:flex;align-items:baseline;gap:12px;margin-bottom:4px}
+  .sec-h h2{font-size:20px}
+  .sec-h .n{font-family:var(--f-mono);font-size:12px;color:var(--faint)}
+  .sec-sub{color:var(--muted);font-size:13.5px;margin:0 0 16px}
+
+  /* ER diagram */
+  .erbox{background:var(--surface);border:1px solid var(--border);border-radius:14px;box-shadow:var(--shadow);padding:10px;overflow-x:auto}
+  .erbox pre.mermaid{margin:0;text-align:center;min-width:640px}
+  .erfallback{padding:24px;color:var(--muted);font-size:13px}
+
+  /* entity cards */
+  .ent{background:var(--surface);border:1px solid var(--border);border-radius:14px;box-shadow:var(--shadow);overflow:hidden;margin-bottom:18px}
+  .ent.isnew{border-color:var(--new);box-shadow:0 0 0 1px var(--new),var(--shadow)}
+  .ent>.hd{display:flex;align-items:center;gap:10px;padding:13px 16px;border-bottom:1px solid var(--border);background:var(--surface-2);flex-wrap:wrap}
+  .ent>.hd .tn{font-family:var(--f-mono);font-size:14px;font-weight:700;color:var(--accent)}
+  .ent>.hd .dn{font-size:12.5px;color:var(--muted)}
+  .tag-new{font-size:9.5px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;background:var(--new-soft);color:var(--new);padding:2px 7px;border-radius:20px;margin-left:auto}
+  .tablewrap{overflow-x:auto}
+  table{width:100%;border-collapse:collapse;font-size:13px;min-width:540px}
+  th{text-align:left;font-size:10.5px;letter-spacing:.07em;text-transform:uppercase;color:var(--faint);font-weight:700;padding:9px 14px;border-bottom:1px solid var(--border);white-space:nowrap}
+  td{padding:9px 14px;border-bottom:1px solid var(--border);vertical-align:top}
+  tr:last-child td{border-bottom:none}
+  td.col{font-family:var(--f-mono);font-weight:600;white-space:nowrap}
+  td.ty{font-family:var(--f-mono);font-size:12px;color:var(--muted);white-space:nowrap}
+  td.k{white-space:nowrap}
+  td.nt{color:var(--muted);font-size:12.5px;min-width:190px}
+  .k .kbadge{margin-right:3px}
+  .fkref{font-family:var(--f-mono);font-size:11px;color:var(--fk)}
+
+  .notes{background:var(--surface);border:1px solid var(--border);border-left:3px solid var(--accent);border-radius:12px;box-shadow:var(--shadow);padding:18px 20px}
+  .notes h3{font-size:15px;margin-bottom:10px}
+  .notes ul{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:9px}
+  .notes li{font-size:13.5px;color:var(--fg)}
+  .notes b{color:var(--accent)}
+  .notes code{font-family:var(--f-mono);font-size:12px;background:var(--surface-2);padding:1px 5px;border-radius:5px;border:1px solid var(--border)}
+
+  footer{margin-top:40px;padding-top:18px;border-top:1px solid var(--border);color:var(--faint);font-size:12px}
+  @media(max-width:620px){header.hero h1{font-size:24px}}
+</style>
+
+<div class="page">
+  <header class="hero">
+    <div class="eyebrow">Especificación técnica · v5</div>
+    <h1>Modelo de datos · Sistema de Comités Paritarios</h1>
+    <p>Esquema relacional de <b>Paritario</b>, plataforma independiente para gestionar Comités Paritarios de Higiene y Seguridad. Funciona en dos modos: <b>venta directa</b> a empresas y <b>marca blanca</b> para organismos administradores (mutualidades o servicios públicos) que entregan la plataforma a sus empresas adherentes con su propia marca. <b>30 entidades</b> en cinco dominios, alineado al <b>DS 44/2024</b> y preparado para la <b>Ley 21.719</b> de protección de datos, con paridad funcional sobre plataformas de referencia del mercado (comisiones, programa de trabajo por rubro, material de apoyo, autoservicio de accesos). Tipos en notación PostgreSQL; aplican igual a SQL Server con equivalencias menores. Las entidades marcadas <span class="tag-new" style="margin:0">nuevo</span> son las sumadas en esta versión.</p>
+    <div class="toolbar">
+      <div class="legend">
+        <span class="lg"><span class="kbadge kpk">PK</span>llave primaria</span>
+        <span class="lg"><span class="kbadge kfk">FK</span>llave foránea</span>
+        <span class="lg"><span class="kbadge kuq">UQ</span>único</span>
+      </div>
+      <button class="themebtn" id="themebtn" aria-label="Cambiar tema"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="4.5"/><path d="M12 2v2.5M12 19.5V22M4.2 4.2l1.8 1.8M18 18l1.8 1.8M2 12h2.5M19.5 12H22M4.2 19.8l1.8-1.8M18 6l1.8-1.8"/></svg></button>
+    </div>
+  </header>
+
+  <section>
+    <div class="sec-h"><h2>Diagrama entidad-relación</h2></div>
+    <p class="sec-sub">Cardinalidad en notación crow's-foot: <span class="mono">||</span> uno y solo uno · <span class="mono">o{</span> cero o muchos · <span class="mono">o|</span> cero o uno.</p>
+    <div class="erbox"><pre class="mermaid" id="er"></pre><div class="erfallback" id="erfb" hidden>No se pudo dibujar el diagrama; las relaciones están descritas en las notas de diseño y en las columnas FK de cada tabla.</div></div>
+  </section>
+
+  <div id="domains"></div>
+
+  <section>
+    <div class="sec-h"><h2>Decisiones de diseño</h2></div>
+    <div class="notes"><ul>
+      <li><b>Alineado al DS 44/2024.</b> El nuevo Reglamento sobre Gestión Preventiva de los Riesgos Laborales reemplaza el marco anterior (DS 54/DS 40). El programa de trabajo, la clasificación de actividades (<code>obligatoria_ley</code>) y la prelación de medidas se modelan según el DS 44, igual que hacen las plataformas líderes del mercado.</li>
+      <li><b>Programa de trabajo por rubro, con plantillas.</b> <code>programa_plantilla</code> + <code>actividad_tipo</code> permiten que el sistema proponga un programa predeterminado según el rubro de la empresa (configuración automática) o que el comité lo arme manual. Al constituir el comité, las actividades tipo se instancian en <code>actividad</code>.</li>
+      <li><b>Actividades como flujo Kanban.</b> Cada <code>actividad</code> tiene <code>estado</code> (planificado · en_ejecucion · cerrado), <code>frecuencia</code>, <code>clasificacion</code>, la <code>comision</code> responsable y puede tener subactividades (<code>actividad_padre_id</code>). El cumplimiento se calcula; no se guarda a mano.</li>
+      <li><b>Comisiones del comité.</b> <code>comision</code> + <code>comision_integrante</code> modelan las comisiones (investigación de accidentes, capacitación y difusión, inspección y observación, y personalizadas) y quiénes las integran.</li>
+      <li><b>Integrante aforado.</b> <code>comite_integrante.es_aforado</code> marca la persona con fuero, cuya designación debe constar en el acta de constitución.</li>
+      <li><b>Autoservicio con aprobación.</b> <code>solicitud_acceso</code> permite que un usuario de la empresa se registre y que el administrador de la empresa apruebe o rechace, generando luego el <code>usuario_rol</code> con su ámbito. El ámbito (<code>empresa_id</code> + <code>comite_id</code>) vive en los datos, así ningún usuario ve comités de otra empresa cambiando un ID en la URL.</li>
+      <li><b>Material de apoyo reutilizable.</b> <code>material_apoyo</code> es la biblioteca (videos, guías, formatos); <code>actividad_material</code> lo asocia a cada actividad tipo, como "documento recomendado" descargable.</li>
+      <li><b>Niveles de certificación parametrizables.</b> <code>nivel_certificacion</code> cataloga los niveles y sus criterios; <code>auditoria</code> referencia el nivel otorgado en vez de un texto fijo.</li>
+      <li><b>Aislamiento en dos niveles.</b> Cada tabla de negocio pertenece a una <code>empresa</code>, y cada empresa puede pertenecer a un <code>organismo</code>. PostgreSQL aplica <i>Row-Level Security</i> por <code>empresa_id</code> y por <code>organismo_id</code>: una empresa solo ve lo suyo, un organismo ve solo sus empresas, y ningún organismo ve datos de otro.</li>
+      <li><b>Dos modos de uso.</b> Una empresa con <code>organismo_id</code> nulo es cliente directo; una con <code>organismo_id</code> la recibe de su organismo en marca blanca. El mismo código y la misma base atienden ambos casos.</li>
+      <li><b>Marca blanca parametrizada.</b> Nombre, logo, colores, dominio y remitente de correo viven en <code>organismo</code>; no hay una copia del sistema por cliente. El organismo aporta además sus propias plantillas, material de apoyo y programa de certificación (<code>organismo_id</code> en esas tablas; nulo = contenido general).</li>
+      <li><b>Roles de organismo.</b> <code>ADMIN_ORGANISMO</code> administra la marca, las integraciones y ve reportes consolidados de todas sus empresas; <code>ASESOR_ORGANISMO</code> (p. ej. experto en prevención) acompaña a las empresas que tiene asignadas.</li>
+      <li><b>Historial, no sobrescritura.</b> Integrantes, reuniones, actividades y auditorías se versionan por fechas; la baja de un comité se marca con estado y fecha, nunca se borra, para mantener la trazabilidad legal. <code>log_acceso</code> registra los accesos a datos personales (Ley 21.719).</li>
+      <li><b>Preparado para la Ley 21.719.</b> El dominio 05 agrega <code>solicitud_derecho_titular</code> (derechos ARCOP), <code>politica_retencion</code> (conservación vs. supresión), <code>registro_incidente</code> (notificación de brechas) y <code>encargado_tratamiento</code> (contratos de encargo y transferencia internacional). La base de licitud es el <b>cumplimiento de obligación legal</b> (Ley 16.744 y DS 44), no el consentimiento.</li>
+      <li><b>Datos sensibles identificados.</b> <code>documento.contiene_datos_sensibles</code> marca los archivos con datos de salud (investigación de accidentes y enfermedades profesionales), que reciben acceso reforzado y una retención propia en <code>politica_retencion</code>.</li>
+    </ul></div>
+  </section>
+
+  <footer>Especificación v5 · producto independiente con marca blanca para organismos · datos y nombres de ejemplo · notación PostgreSQL 16 · paridad funcional de mercado, identidad propia.</footer>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/mermaid/10.9.1/mermaid.min.js"></script>
+<script>
+/* ---------------- entity definitions ---------------- */
+// [col, type, key, note]   key: "PK" | "FK:tabla" | "UQ" | "PK,FK:t" | ""
+// entity: {name, desc, cols, isNew?}
+const DOMAINS=[
+ {n:"01", t:"Organización", s:"Organismos administradores, empresas y centros de trabajo.",
+  ents:[
+   {name:"organismo", desc:"Organismo administrador que contrata la plataforma en marca blanca.", isNew:true, cols:[
+     ["id","bigint","PK",""],["rut","varchar(12)","UQ",""],["nombre","varchar(200)","","nombre legal"],
+     ["tipo","enum","","mutualidad · servicio_publico · otro"],
+     ["marca_nombre","varchar(120)","","nombre que ven sus empresas"],["logo_key","varchar(300)","","logo en S3"],
+     ["color_primario","varchar(7)","","color de marca (#RRGGBB)"],
+     ["dominio","varchar(160)","UQ","dominio propio, p. ej. comites.organismo.cl"],
+     ["correo_remitente","varchar(160)","","remitente de notificaciones"],
+     ["estado","enum","","activo · en_implementacion · baja"],["fecha_contrato","date","",""]]},
+   {name:"integracion_organismo", desc:"Conexión con sistemas del organismo.", isNew:true, cols:[
+     ["id","bigint","PK",""],["organismo_id","bigint","FK:organismo",""],
+     ["tipo","enum","","sso · adherentes · certificacion · reportes"],
+     ["protocolo","varchar(30)","","SAML · OIDC · API REST · SFTP"],
+     ["configuracion","jsonb","","parámetros sin secretos (los secretos van en la bóveda)"],
+     ["estado","enum","","en_prueba · activa · inactiva"],["ultima_sincronizacion","timestamptz","",""]]},
+   {name:"empresa", desc:"Empresa cliente de la plataforma (tenant).", cols:[
+     ["id","bigint","PK",""],["rut","varchar(12)","UQ","RUT de la empresa"],
+     ["razon_social","varchar(200)","","Razón social legal"],["nombre_fantasia","varchar(200)","",""],
+     ["rubro","varchar(120)","","Actividad económica — define la plantilla de programa"],
+     ["organismo_id","bigint","FK:organismo","organismo que la entrega; nulo si es cliente directo"],
+     ["organismo_administrador","enum","","ACHS · Mutual de Seguridad · IST · ISL (informativo)"],
+     ["plan","varchar(40)","","plan contratado"],
+     ["estado","enum","","activo · suspendido · baja"],["fecha_alta","date","",""],["created_at","timestamptz","",""]]},
+   {name:"sucursal", desc:"Centro de trabajo donde se constituye un comité.", cols:[
+     ["id","bigint","PK",""],["empresa_id","bigint","FK:empresa",""],
+     ["alias","varchar(120)","","nombre corto de gestión"],["nombre","varchar(160)","",""],
+     ["direccion_calle","varchar(160)","",""],["direccion_numero","varchar(20)","",""],["comuna_id","bigint","FK:comuna",""],
+     ["masa_trabajadores","int","","dotación del centro"],["estado","enum","","vigente · no_vigente"]]},
+   {name:"region", desc:"Catálogo — regiones de Chile.", cols:[
+     ["id","smallint","PK",""],["nombre","varchar(60)","UQ",""],["orden","smallint","","norte→sur"]]},
+   {name:"comuna", desc:"Catálogo — comunas.", cols:[
+     ["id","int","PK",""],["region_id","smallint","FK:region",""],["nombre","varchar(90)","",""]]},
+  ]},
+ {n:"02", t:"Comité, integrantes y comisiones", s:"El comité, las personas que lo conforman y sus comisiones.",
+  ents:[
+   {name:"comite", desc:"Comité Paritario de Higiene y Seguridad.", cols:[
+     ["id","bigint","PK",""],["empresa_id","bigint","FK:empresa",""],["sucursal_id","bigint","FK:sucursal",""],
+     ["nombre","varchar(180)","",""],["estado","enum","","activo · baja"],
+     ["fecha_constitucion","date","",""],["fecha_disolucion","date","","nulo si vigente"],
+     ["periodo_inicio","date","","periodo de 2 años"],["periodo_fin","date","",""],
+     ["n_titulares","smallint","","titulares por parte"],["n_suplentes","smallint","",""],
+     ["created_at","timestamptz","",""],["updated_at","timestamptz","",""]]},
+   {name:"persona", desc:"Dato maestro de una persona (trabajador).", cols:[
+     ["id","bigint","PK",""],["rut","varchar(12)","UQ",""],["nombres","varchar(120)","",""],["apellidos","varchar(120)","",""],
+     ["email","varchar(160)","",""],["telefono","varchar(30)","",""],["created_at","timestamptz","",""]]},
+   {name:"comite_integrante", desc:"Participación de una persona en un comité y periodo.", cols:[
+     ["id","bigint","PK",""],["comite_id","bigint","FK:comite",""],["persona_id","bigint","FK:persona",""],
+     ["tipo","enum","","titular · suplente"],["representacion","enum","","empresa · trabajadores"],
+     ["cargo","enum","","presidente · secretario · integrante"],
+     ["es_aforado","boolean","","persona con fuero (nuevo)"],["fecha_fuero","date","","nulo si no aplica"],
+     ["fecha_inicio","date","",""],["fecha_termino","date","","nulo si vigente"],["vigente","boolean","",""]]},
+   {name:"comision", desc:"Comisión de trabajo del comité.", cols:[
+     ["id","bigint","PK",""],["comite_id","bigint","FK:comite",""],
+     ["tipo","enum","","investigacion_accidentes · capacitacion_difusion · inspeccion_observacion · personalizada"],
+     ["nombre","varchar(160)","","obligatorio si tipo=personalizada"],["created_at","timestamptz","",""]]},
+   {name:"comision_integrante", desc:"Integrantes asignados a una comisión.", cols:[
+     ["id","bigint","PK",""],["comision_id","bigint","FK:comision",""],["integrante_id","bigint","FK:comite_integrante",""]]},
+  ]},
+ {n:"03", t:"Programa de trabajo, cumplimiento y certificación", s:"Plantillas por rubro, actividades Kanban, reuniones, material y auditorías.",
+  ents:[
+   {name:"programa_plantilla", desc:"Programa de trabajo propuesto según rubro.", cols:[
+     ["id","bigint","PK",""],["organismo_id","bigint","FK:organismo","nulo = plantilla general de la plataforma"],["rubro","varchar(120)","","rubro al que aplica"],["nombre","varchar(160)","",""],
+     ["ds_referencia","varchar(20)","","p.ej. DS 44"],["descripcion","text","",""],["vigente","boolean","",""]]},
+   {name:"actividad_tipo", desc:"Actividad predefinida dentro de una plantilla.", cols:[
+     ["id","bigint","PK",""],["plantilla_id","bigint","FK:programa_plantilla",""],["titulo","varchar(200)","",""],
+     ["descripcion","text","",""],["clasificacion","enum","","obligatoria_ley · recomendada"],
+     ["frecuencia","enum","","mensual · quincenal · anual · unica"],
+     ["comision_tipo","enum","","comisión sugerida"],["niveles_cert","varchar(60)","","niveles a los que aplica"]]},
+   {name:"actividad", desc:"Actividad del programa de un comité (flujo Kanban).", cols:[
+     ["id","bigint","PK",""],["comite_id","bigint","FK:comite",""],["actividad_tipo_id","bigint","FK:actividad_tipo","nulo si es manual"],
+     ["actividad_padre_id","bigint","FK:actividad","subactividad"],["comision_id","bigint","FK:comision",""],
+     ["responsable_integrante_id","bigint","FK:comite_integrante",""],["titulo","varchar(200)","",""],["descripcion","text","",""],
+     ["clasificacion","enum","","obligatoria_ley · recomendada"],["frecuencia","enum","",""],
+     ["estado","enum","","planificado · en_ejecucion · cerrado"],
+     ["fecha_planificada","date","",""],["fecha_cierre","date","",""],["evidencia_documento_id","bigint","FK:documento",""]]},
+   {name:"material_apoyo", desc:"Biblioteca de material (videos, guías, formatos).", cols:[
+     ["id","bigint","PK",""],["organismo_id","bigint","FK:organismo","nulo = material general"],["tipo","enum","","video · guia · formato · otro"],["titulo","varchar(200)","",""],
+     ["archivo_key","varchar(300)","","ruta en S3"],["url","varchar(300)","","si es enlace externo"],
+     ["rubro","varchar(120)","","nulo = general"],["descripcion","text","",""]]},
+   {name:"actividad_material", desc:"Material sugerido para una actividad tipo.", cols:[
+     ["id","bigint","PK",""],["actividad_tipo_id","bigint","FK:actividad_tipo",""],["material_id","bigint","FK:material_apoyo",""]]},
+   {name:"reunion", desc:"Reunión mensual del comité (DS 44).", cols:[
+     ["id","bigint","PK",""],["comite_id","bigint","FK:comite",""],
+     ["anio","smallint","",""],["mes","smallint","","1–12"],["numero","smallint","","N° de sesión"],
+     ["fecha_programada","date","",""],["fecha_realizada","date","","nulo si no se realizó"],
+     ["estado","enum","","planificada · realizada · no_realizada"],
+     ["acta_documento_id","bigint","FK:documento","acta de la sesión"],["observacion","text","",""]]},
+   {name:"reunion_asistencia", desc:"Asistencia de cada integrante a una reunión.", cols:[
+     ["id","bigint","PK",""],["reunion_id","bigint","FK:reunion",""],["integrante_id","bigint","FK:comite_integrante",""],
+     ["presente","boolean","",""],["justificacion","varchar(200)","",""]]},
+   {name:"documento", desc:"Acta, certificado u otro archivo del comité.", cols:[
+     ["id","bigint","PK",""],["comite_id","bigint","FK:comite",""],
+     ["tipo","enum","","constitucion · reunion · disolucion · capacitacion · otro"],
+     ["nombre","varchar(200)","",""],["archivo_key","varchar(300)","","ruta en S3"],
+     ["mime","varchar(80)","",""],["tamano_bytes","bigint","",""],
+     ["fecha_documento","date","",""],["fecha_carga","timestamptz","",""],
+     ["contiene_datos_sensibles","boolean","","salud: investigación de accidentes (nuevo)"],
+     ["vigente","boolean","",""],["cargado_por","bigint","FK:usuario",""]]},
+   {name:"nivel_certificacion", desc:"Catálogo de niveles de certificación y sus criterios.", cols:[
+     ["id","smallint","PK",""],["organismo_id","bigint","FK:organismo","programa propio del organismo; nulo = general"],["codigo","varchar(20)","","único por organismo"],["nombre","varchar(80)","",""],
+     ["puntaje_min","numeric(5,2)","",""],["criterios","text","",""]]},
+   {name:"auditoria", desc:"Auditoría de certificación del comité.", cols:[
+     ["id","bigint","PK",""],["comite_id","bigint","FK:comite",""],["auditor_usuario_id","bigint","FK:usuario",""],
+     ["fecha_auditoria","date","",""],["nivel_certificacion_id","smallint","FK:nivel_certificacion",""],
+     ["puntaje","numeric(5,2)","",""],["estado","enum","","pendiente · aprobada · rechazada"],
+     ["informe_key","varchar(300)","","informe en S3"],["proxima_revision","date","",""]]},
+  ]},
+ {n:"04", t:"Seguridad y acceso", s:"Usuarios, roles con ámbito, autoservicio y bitácora.",
+  ents:[
+   {name:"usuario", desc:"Credencial de acceso al sistema.", cols:[
+     ["id","bigint","PK",""],["persona_id","bigint","FK:persona","nulo para cuentas de servicio"],
+     ["rut","varchar(12)","UQ","identificador de login"],["password_hash","varchar(255)","",""],
+     ["estado","enum","","activo · bloqueado"],["mfa_habilitado","boolean","",""],["ultimo_acceso","timestamptz","",""],["created_at","timestamptz","",""]]},
+   {name:"rol", desc:"Rol funcional del sistema.", cols:[
+     ["id","smallint","PK",""],["codigo","varchar(20)","UQ","ADMIN_ORGANISMO · ASESOR_ORGANISMO · ADMIN_EMPRESA · COORDINADOR · AUDITOR"],["nombre","varchar(80)","",""],["descripcion","varchar(200)","",""]]},
+   {name:"usuario_rol", desc:"Asignación de rol CON ámbito — clave del control de acceso.", cols:[
+     ["id","bigint","PK",""],["usuario_id","bigint","FK:usuario",""],["rol_id","smallint","FK:rol",""],
+     ["organismo_id","bigint","FK:organismo","ámbito: todas las empresas del organismo"],
+     ["empresa_id","bigint","FK:empresa","ámbito: una empresa (nulo en roles de organismo)"],["comite_id","bigint","FK:comite","ámbito opcional (Coordinador)"],
+     ["vigente","boolean","",""],["created_at","timestamptz","",""]]},
+   {name:"solicitud_acceso", desc:"Autoservicio: registro de usuario pendiente de aprobación.", cols:[
+     ["id","bigint","PK",""],["rut","varchar(12)","",""],["nombre","varchar(160)","",""],["email","varchar(160)","",""],
+     ["empresa_id","bigint","FK:empresa",""],["rol_solicitado_id","smallint","FK:rol",""],["comite_id","bigint","FK:comite","ámbito pedido"],
+     ["estado","enum","","pendiente · aprobada · rechazada"],["resuelta_por","bigint","FK:usuario",""],
+     ["fecha_solicitud","timestamptz","",""],["fecha_resolucion","timestamptz","",""]]},
+   {name:"log_acceso", desc:"Bitácora de acceso a datos personales (Ley 21.719).", cols:[
+     ["id","bigint","PK",""],["usuario_id","bigint","FK:usuario",""],
+     ["accion","enum","","login · ver · crear · editar · eliminar · exportar"],
+     ["entidad","varchar(60)","","tabla afectada"],["entidad_id","bigint","",""],
+     ["ip","inet","",""],["user_agent","varchar(300)","",""],["timestamp","timestamptz","",""]]},
+  ]},
+ {n:"05", t:"Cumplimiento y privacidad", s:"Soporte a la Ley 21.719: derechos de titulares, retención, brechas y encargados.",
+  ents:[
+   {name:"solicitud_derecho_titular", desc:"Ejercicio de derechos ARCOP del trabajador.", cols:[
+     ["id","bigint","PK",""],["persona_id","bigint","FK:persona",""],
+     ["tipo","enum","","acceso · rectificacion · supresion · oposicion · portabilidad"],
+     ["estado","enum","","recibida · en_proceso · respondida · rechazada"],
+     ["canal","varchar(60)","","web · correo · presencial"],
+     ["fecha_solicitud","timestamptz","",""],["fecha_respuesta","timestamptz","","dentro del plazo legal"],
+     ["resuelta_por","bigint","FK:usuario",""],["observacion","text","",""]]},
+   {name:"politica_retencion", desc:"Plazo de conservación por tipo de dato / documento.", cols:[
+     ["id","smallint","PK",""],["entidad","varchar(60)","","tabla o tipo de documento"],
+     ["descripcion","varchar(200)","",""],["periodo_meses","int","","0 = conservación legal indefinida"],
+     ["accion_al_vencer","enum","","anonimizar · eliminar · conservar_legal"],["base_legal","varchar(160)","",""]]},
+   {name:"registro_incidente", desc:"Brechas de seguridad; notificación a la Agencia y a titulares.", cols:[
+     ["id","bigint","PK",""],["fecha_deteccion","timestamptz","",""],["descripcion","text","",""],
+     ["datos_afectados","varchar(200)","",""],["n_titulares","int","",""],
+     ["severidad","enum","","baja · media · alta · critica"],
+     ["notificado_agencia","boolean","",""],["fecha_notif_agencia","timestamptz","",""],
+     ["notificado_titulares","boolean","",""],["estado","enum","","abierto · contenido · cerrado"],["responsable_id","bigint","FK:usuario",""]]},
+   {name:"encargado_tratamiento", desc:"Subencargados que tratan datos por cuenta del proveedor (p. ej. la nube).", cols:[
+     ["id","smallint","PK",""],["nombre","varchar(160)","","p.ej. proveedor nube / software"],
+     ["tipo","enum","","nube · proveedor · subencargado"],["pais","varchar(60)","","residencia de los datos"],
+     ["contrato_dpa","boolean","","contrato de encargo firmado"],
+     ["transferencia_internacional","boolean","","true si los datos salen de Chile"],
+     ["salvaguarda","varchar(160)","","cláusulas tipo / garantías"],["vigente","boolean","",""]]},
+  ]},
+];
+
+/* ---------------- render entity cards ---------------- */
+const esc=s=>String(s).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+function kbadge(k){
+  if(!k)return"";
+  return k.split(",").map(part=>{
+    if(part==="PK")return'<span class="kbadge kpk">PK</span>';
+    if(part==="UQ")return'<span class="kbadge kuq">UQ</span>';
+    if(part.startsWith("FK:"))return'<span class="kbadge kfk">FK</span><span class="fkref">→ '+esc(part.slice(3))+'</span>';
+    return"";
+  }).join(" ");
+}
+const dh=document.getElementById("domains");
+DOMAINS.forEach(d=>{
+  const sec=document.createElement("section");
+  sec.innerHTML=`<div class="sec-h"><span class="n">${d.n}</span><h2>${esc(d.t)}</h2></div><p class="sec-sub">${esc(d.s)}</p>`;
+  d.ents.forEach(e=>{
+    const card=document.createElement("div");card.className="ent"+(e.isNew?" isnew":"");
+    card.innerHTML=`<div class="hd"><span class="tn">${esc(e.name)}</span><span class="dn">${esc(e.desc)}</span>${e.isNew?'<span class="tag-new">nuevo</span>':""}</div>
+      <div class="tablewrap"><table><thead><tr><th>Columna</th><th>Tipo</th><th>Llave</th><th>Descripción</th></tr></thead>
+      <tbody>${e.cols.map(c=>`<tr><td class="col">${esc(c[0])}</td><td class="ty">${esc(c[1])}</td><td class="k">${kbadge(c[2])}</td><td class="nt">${esc(c[3]||"")}</td></tr>`).join("")}</tbody></table></div>`;
+    sec.appendChild(card);
+  });
+  dh.appendChild(sec);
+});
+
+/* ---------------- ER diagram (mermaid, theme-aware) ---------------- */
+const ER=`erDiagram
+  REGION ||--o{ COMUNA : contiene
+  COMUNA ||--o{ SUCURSAL : ubica
+  ORGANISMO |o--o{ EMPRESA : entrega_a
+  ORGANISMO ||--o{ INTEGRACION_ORGANISMO : configura
+  ORGANISMO |o--o{ PROGRAMA_PLANTILLA : aporta
+  ORGANISMO |o--o{ MATERIAL_APOYO : aporta
+  ORGANISMO |o--o{ NIVEL_CERTIFICACION : define
+  ORGANISMO |o--o{ USUARIO_ROL : delimita
+  EMPRESA ||--o{ SUCURSAL : tiene
+  EMPRESA ||--o{ COMITE : agrupa
+  SUCURSAL ||--o{ COMITE : alberga
+  COMITE ||--o{ COMITE_INTEGRANTE : conforma
+  PERSONA ||--o{ COMITE_INTEGRANTE : participa
+  PERSONA ||--o| USUARIO : accede
+  COMITE ||--o{ COMISION : organiza
+  COMISION ||--o{ COMISION_INTEGRANTE : agrupa
+  COMITE_INTEGRANTE ||--o{ COMISION_INTEGRANTE : integra
+  EMPRESA }o--o| PROGRAMA_PLANTILLA : usa_por_rubro
+  PROGRAMA_PLANTILLA ||--o{ ACTIVIDAD_TIPO : define
+  ACTIVIDAD_TIPO ||--o{ ACTIVIDAD : instancia
+  COMITE ||--o{ ACTIVIDAD : ejecuta
+  COMISION ||--o{ ACTIVIDAD : responsable
+  ACTIVIDAD ||--o{ ACTIVIDAD : subactividad
+  ACTIVIDAD_TIPO ||--o{ ACTIVIDAD_MATERIAL : sugiere
+  MATERIAL_APOYO ||--o{ ACTIVIDAD_MATERIAL : usado_en
+  COMITE ||--o{ REUNION : programa
+  REUNION ||--o| DOCUMENTO : respalda
+  COMITE ||--o{ DOCUMENTO : archiva
+  REUNION ||--o{ REUNION_ASISTENCIA : registra
+  COMITE_INTEGRANTE ||--o{ REUNION_ASISTENCIA : asiste
+  COMITE ||--o{ AUDITORIA : evalua
+  NIVEL_CERTIFICACION ||--o{ AUDITORIA : otorga
+  USUARIO ||--o{ AUDITORIA : realiza
+  USUARIO ||--o{ USUARIO_ROL : posee
+  ROL ||--o{ USUARIO_ROL : define
+  EMPRESA ||--o{ USUARIO_ROL : delimita
+  EMPRESA ||--o{ SOLICITUD_ACCESO : recibe
+  ROL ||--o{ SOLICITUD_ACCESO : solicita
+  USUARIO ||--o{ LOG_ACCESO : genera
+  PERSONA ||--o{ SOLICITUD_DERECHO_TITULAR : ejerce
+  USUARIO ||--o{ SOLICITUD_DERECHO_TITULAR : resuelve
+  USUARIO ||--o{ REGISTRO_INCIDENTE : gestiona
+  POLITICA_RETENCION { }
+  ENCARGADO_TRATAMIENTO { }`;
+
+function curTheme(){
+  const a=document.documentElement.getAttribute("data-theme");
+  if(a)return a;
+  return matchMedia("(prefers-color-scheme:dark)").matches?"dark":"light";
+}
+let mermaidOK=typeof mermaid!=="undefined";
+function drawER(){
+  const el=document.getElementById("er");
+  if(!mermaidOK){document.getElementById("erfb").hidden=false;el.hidden=true;return;}
+  try{
+    mermaid.initialize({startOnLoad:false,theme:curTheme()==="dark"?"dark":"neutral",securityLevel:"loose",er:{useMaxWidth:true}});
+    el.removeAttribute("data-processed");
+    el.innerHTML=esc(ER);
+    mermaid.run({nodes:[el]});
+  }catch(err){document.getElementById("erfb").hidden=false;el.hidden=true;}
+}
+drawER();
+
+/* theme toggle */
+(function(){let t=null;try{t=localStorage.getItem("mdl-theme");}catch(e){}if(t)document.documentElement.setAttribute("data-theme",t);drawER();
+  document.getElementById("themebtn").onclick=()=>{const dark=curTheme()==="dark";const n=dark?"light":"dark";
+    document.documentElement.setAttribute("data-theme",n);try{localStorage.setItem("mdl-theme",n);}catch(e){}drawER();};})();
+</script>

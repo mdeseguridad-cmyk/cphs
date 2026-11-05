@@ -1,0 +1,255 @@
+<!doctype html>
+<html lang="es">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<style>body{margin:0}[hidden]{display:none!important}</style>
+<meta name="claude:viewport-fit-sides" content="cover">
+<title>Anexo de Privacidad</title>
+<style>
+  /* Compliance annex: sectioned reference with matrices and an interactive checklist. */
+  :root{
+    --bg:#eef1f3; --surface:#ffffff; --surface-2:#f4f7f8; --border:#dde3e6; --border-strong:#c6d0d4;
+    --fg:#131a1e; --muted:#566368; --faint:#869298;
+    --accent:#0f766e; --accent-soft:#d7ece9;
+    --ok:#15803d; --ok-soft:#dcf0e2; --warn:#b45309; --warn-soft:#fbeccf; --crit:#b91c1c; --crit-soft:#f7dada;
+    --shadow:0 1px 2px rgba(16,30,36,.06),0 3px 12px rgba(16,30,36,.05);
+    --f-display:"Archivo","Segoe UI",system-ui,sans-serif;
+    --f-body:"Public Sans","Segoe UI",system-ui,sans-serif;
+    --f-mono:"IBM Plex Mono",ui-monospace,monospace;
+    color-scheme:light;
+  }
+  @media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+    --bg:#0c1114; --surface:#141b1f; --surface-2:#1a2328; --border:#28343a; --border-strong:#3a4a52;
+    --fg:#e8eef1; --muted:#9db0b8; --faint:#6b7d85;
+    --accent:#2dd4bf; --accent-soft:#113b38;
+    --ok:#4ade80; --ok-soft:#10301d; --warn:#fbbf24; --warn-soft:#3a2a09; --crit:#f87171; --crit-soft:#3a1414;
+    --shadow:0 1px 2px rgba(0,0,0,.4),0 3px 14px rgba(0,0,0,.35);
+    color-scheme:dark;
+  }}
+  :root[data-theme="dark"]{
+    --bg:#0c1114; --surface:#141b1f; --surface-2:#1a2328; --border:#28343a; --border-strong:#3a4a52;
+    --fg:#e8eef1; --muted:#9db0b8; --faint:#6b7d85;
+    --accent:#2dd4bf; --accent-soft:#113b38;
+    --ok:#4ade80; --ok-soft:#10301d; --warn:#fbbf24; --warn-soft:#3a2a09; --crit:#f87171; --crit-soft:#3a1414;
+    --shadow:0 1px 2px rgba(0,0,0,.4),0 3px 14px rgba(0,0,0,.35);
+    color-scheme:dark;
+  }
+  *{box-sizing:border-box}
+  body{background:var(--bg);color:var(--fg);font-family:var(--f-body);line-height:1.6;-webkit-font-smoothing:antialiased}
+  .page{width:100%;max-width:880px;margin:0 auto;padding:28px max(16px,env(safe-area-inset-right,0)) 64px max(16px,env(safe-area-inset-left,0))}
+  h1,h2,h3{font-family:var(--f-display);margin:0;letter-spacing:-.015em;text-wrap:balance}
+  .mono{font-family:var(--f-mono)}
+
+  header.hero{border-bottom:1px solid var(--border);padding-bottom:22px;margin-bottom:10px}
+  .eyebrow{font-size:11.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--accent);font-weight:700}
+  header.hero h1{font-size:30px;margin:8px 0 6px}
+  header.hero p{margin:0;color:var(--muted);font-size:14.5px;max-width:68ch}
+  .themebtn{float:right;width:36px;height:36px;border-radius:9px;border:1px solid var(--border);background:var(--surface);color:var(--muted);cursor:pointer;display:grid;place-items:center}
+
+  .banner{display:flex;gap:12px;align-items:flex-start;background:var(--warn-soft);border:1px solid color-mix(in srgb,var(--warn) 30%,transparent);border-radius:12px;padding:14px 16px;margin:20px 0;font-size:13.5px;color:var(--fg)}
+  .banner svg{width:20px;height:20px;color:var(--warn);flex:none;margin-top:1px}
+  .banner b{color:var(--warn)}
+
+  section{margin-top:30px}
+  .sec-h{display:flex;align-items:baseline;gap:12px;margin-bottom:10px}
+  .sec-h .n{font-family:var(--f-mono);font-size:13px;color:var(--accent);font-weight:700}
+  .sec-h h2{font-size:19px}
+  section>p{margin:0 0 12px;font-size:14px}
+  section>p.lead{color:var(--muted)}
+
+  .cards{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin:6px 0 4px}
+  .mini{background:var(--surface);border:1px solid var(--border);border-radius:12px;box-shadow:var(--shadow);padding:14px}
+  .mini .t{font-weight:700;font-size:13.5px;color:var(--accent);margin-bottom:4px}
+  .mini .d{font-size:12.5px;color:var(--muted)}
+
+  .tablewrap{overflow-x:auto;border:1px solid var(--border);border-radius:12px;box-shadow:var(--shadow);background:var(--surface)}
+  table{width:100%;border-collapse:collapse;font-size:12.5px;min-width:600px}
+  th{text-align:left;font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--faint);font-weight:700;padding:10px 13px;border-bottom:1px solid var(--border);white-space:nowrap;background:var(--surface-2)}
+  td{padding:10px 13px;border-bottom:1px solid var(--border);vertical-align:top}
+  tr:last-child td{border-bottom:none}
+  td b{font-weight:600}
+  .pill{display:inline-block;font-size:10.5px;font-weight:700;padding:2px 8px;border-radius:20px;white-space:nowrap}
+  .pill.sens{background:var(--crit-soft);color:var(--crit)} .pill.norm{background:var(--surface-2);color:var(--muted)}
+
+  ul.clean{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:7px}
+  ul.clean li{font-size:13.5px}
+  ul.clean b{color:var(--accent)}
+  code{font-family:var(--f-mono);font-size:12px;background:var(--surface-2);padding:1px 5px;border-radius:5px;border:1px solid var(--border)}
+
+  .flow{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:6px 0 2px}
+  .step{background:var(--surface);border:1px solid var(--border);border-radius:9px;padding:8px 12px;font-size:12.5px;font-weight:600;box-shadow:var(--shadow)}
+  .arrow{color:var(--faint);font-weight:700}
+
+  .check{background:var(--surface);border:1px solid var(--border);border-radius:12px;box-shadow:var(--shadow);overflow:hidden}
+  .citem{display:flex;gap:12px;align-items:flex-start;padding:12px 16px;border-bottom:1px solid var(--border);cursor:pointer}
+  .citem:last-child{border-bottom:none}
+  .citem:hover{background:var(--surface-2)}
+  .box{width:20px;height:20px;border-radius:6px;border:2px solid var(--border-strong);flex:none;display:grid;place-items:center;margin-top:1px;transition:.12s}
+  .box svg{width:13px;height:13px;color:#fff;opacity:0}
+  .citem.on .box{background:var(--accent);border-color:var(--accent)}
+  .citem.on .box svg{opacity:1}
+  .citem .ct{font-size:13.5px;font-weight:600}
+  .citem .cd{font-size:12px;color:var(--muted)}
+  .citem.on .ct{color:var(--muted);text-decoration:line-through}
+  .progress{display:flex;align-items:center;gap:12px;padding:12px 16px;background:var(--surface-2);border-bottom:1px solid var(--border);font-size:12.5px;font-weight:700}
+  .ptrack{flex:1;height:8px;border-radius:5px;background:var(--border);overflow:hidden}
+  .pfill{height:100%;background:var(--accent);border-radius:5px;transition:.2s}
+
+  footer{margin-top:40px;padding-top:18px;border-top:1px solid var(--border);color:var(--faint);font-size:12px}
+  @media(max-width:620px){header.hero h1{font-size:24px}.cards{grid-template-columns:1fr}}
+</style>
+
+<div class="page">
+  <header class="hero">
+    <button class="themebtn" id="themebtn" aria-label="Cambiar tema"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="4.5"/><path d="M12 2v2.5M12 19.5V22M4.2 4.2l1.8 1.8M18 18l1.8 1.8M2 12h2.5M19.5 12H22M4.2 19.8l1.8-1.8M18 6l1.8-1.8"/></svg></button>
+    <div class="eyebrow">Anexo de cumplimiento</div>
+    <h1>Anexo de Privacidad · Ley 21.719</h1>
+    <p>Cómo <b>Paritario</b>, plataforma independiente y multiempresa, trata datos personales y qué controles aplica frente a la Ley 21.719 de Protección de Datos Personales y la vigente Ley 19.628. Cada empresa cliente es responsable de los datos de sus trabajadores; el proveedor de la plataforma es encargado del tratamiento. Complemento del modelo de datos y la especificación funcional.</p>
+  </header>
+
+  <div class="banner">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 9v4M12 17h.01M10.3 3.9L2.4 18a2 2 0 0 0 1.7 3h15.8a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/></svg>
+    <div><b>Vigencia:</b> la Ley 21.719 (publicada 13-12-2024) entra en vigor el <b>1 de diciembre de 2026</b>; existe un proyecto para postergarla a diciembre de 2027 aún en trámite. Este anexo es orientación de diseño, <b>no asesoría legal</b>: debe validarse con asesoría legal.</div>
+  </div>
+
+  <section>
+    <div class="sec-h"><span class="n">1</span><h2>Roles en el tratamiento</h2></div>
+    <div class="cards">
+      <div class="mini"><div class="t">Responsable</div><div class="d">Cada empresa cliente: decide para qué se usan los datos de sus trabajadores y responde ante la Agencia.</div></div>
+      <div class="mini"><div class="t">Encargado</div><div class="d">El proveedor de Paritario: trata los datos solo por instrucción de cada cliente, bajo contrato de encargo (DPA). La nube (p. ej. AWS) actúa como subencargado.</div></div>
+      <div class="mini"><div class="t">Titular</div><div class="d">El trabajador integrante del comité: dueño de sus datos, con derechos ARCOP.</div></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-h"><span class="n">2</span><h2>Base de licitud</h2></div>
+    <p class="lead">La base de licitud es de cada <b>empresa cliente</b>: el <b>cumplimiento de su obligación legal</b> (la Ley 16.744 y el DS 44 la obligan a constituir y gestionar sus CPHS), <b>no el consentimiento</b>. Por eso operar el comité no requiere autorización del trabajador. El proveedor no necesita una base propia: trata los datos solo para prestar el servicio y por instrucción del cliente.</p>
+  </section>
+
+  <section>
+    <div class="sec-h"><span class="n">3</span><h2>Matriz de datos, finalidad y retención</h2></div>
+    <div class="tablewrap"><table>
+      <thead><tr><th>Categoría de dato</th><th>Ejemplos</th><th>Finalidad</th><th>Tipo</th><th>Retención propuesta</th></tr></thead>
+      <tbody>
+        <tr><td><b>Identificación</b></td><td>RUT, nombres, apellidos</td><td>Conformar el comité e identificar integrantes</td><td><span class="pill norm">Común</span></td><td>Vigencia + conservación legal</td></tr>
+        <tr><td><b>Contacto</b></td><td>Email, teléfono</td><td>Convocatoria y notificaciones</td><td><span class="pill norm">Común</span></td><td>Mientras sea integrante</td></tr>
+        <tr><td><b>Participación</b></td><td>Cargo, representación, asistencia</td><td>Gestión y actas del comité</td><td><span class="pill norm">Común</span></td><td>Conservación legal (actas)</td></tr>
+        <tr><td><b>Salud / siniestros</b></td><td>Investigación de accidentes y enfermedades profesionales</td><td>Prevención y medidas correctivas</td><td><span class="pill sens">Sensible</span></td><td>Acceso reforzado · retención específica</td></tr>
+        <tr><td><b>Acceso al sistema</b></td><td>Credencial, rol, bitácora</td><td>Seguridad y trazabilidad</td><td><span class="pill norm">Común</span></td><td>Según política de logs</td></tr>
+      </tbody>
+    </table></div>
+    <p style="font-size:12.5px;color:var(--muted);margin-top:10px">Los <b>datos de salud</b> de la investigación de accidentes son de categoría especial: se marcan con <code>documento.contiene_datos_sensibles</code> y reciben control de acceso más estricto.</p>
+  </section>
+
+  <section>
+    <div class="sec-h"><span class="n">4</span><h2>Principios y cómo los cumple el sistema</h2></div>
+    <ul class="clean">
+      <li><b>Finalidad y proporcionalidad.</b> Se tratan solo los datos necesarios para la gestión del comité; el modelo guarda campos mínimos.</li>
+      <li><b>Seguridad.</b> Cifrado en tránsito y reposo, control de acceso por ámbito (<code>usuario_rol</code> con empresa/comité), archivos en almacenamiento privado, secretos en bóveda, MFA para usuarios.</li>
+      <li><b>Confidencialidad.</b> Cada rol (Administrador, Coordinador, Auditor) ve solo lo de su ámbito; los datos sensibles tienen acceso restringido.</li>
+      <li><b>Calidad.</b> Catálogos (región/comuna) y validaciones evitan datos erróneos o duplicados.</li>
+      <li><b>Responsabilidad proactiva.</b> <code>log_acceso</code> permite demostrar quién accedió a qué y cuándo.</li>
+      <li><b>Transparencia.</b> Aviso de privacidad accesible con finalidad, base legal, plazos y cómo ejercer derechos.</li>
+    </ul>
+  </section>
+
+  <section>
+    <div class="sec-h"><span class="n">5</span><h2>Derechos del titular (ARCOP)</h2></div>
+    <p class="lead">El trabajador puede ejercer: <b>A</b>cceso, <b>R</b>ectificación, <b>C</b>ancelación/supresión, <b>O</b>posición y <b>P</b>ortabilidad. El sistema los gestiona con la entidad <code>solicitud_derecho_titular</code>.</p>
+    <div class="flow">
+      <span class="step">Solicitud (web / correo)</span><span class="arrow">→</span>
+      <span class="step">Registro y verificación de identidad</span><span class="arrow">→</span>
+      <span class="step">Resolución en plazo legal</span><span class="arrow">→</span>
+      <span class="step">Respuesta al titular + bitácora</span>
+    </div>
+    <p style="font-size:12.5px;color:var(--muted);margin-top:10px">La <b>supresión</b> puede quedar limitada cuando existe obligación legal de conservar (ej. actas); en ese caso se informa al titular el fundamento. Confirmar los plazos exactos de respuesta con el reglamento de la ley.</p>
+  </section>
+
+  <section>
+    <div class="sec-h"><span class="n">6</span><h2>Retención y supresión</h2></div>
+    <p>La entidad <code>politica_retencion</code> define, por tipo de dato o documento, cuánto se conserva y qué pasa al vencer (<b>anonimizar</b>, <b>eliminar</b> o <b>conservar por obligación legal</b>). Resuelve el conflicto entre el derecho a borrado y el deber de conservar registros del comité.</p>
+  </section>
+
+  <section>
+    <div class="sec-h"><span class="n">7</span><h2>Brechas de seguridad</h2></div>
+    <p>Ante una filtración, la ley obliga a <b>notificar a la Agencia y a los afectados</b>. El sistema lleva <code>registro_incidente</code> (detección, datos afectados, severidad, notificaciones, estado) para cumplir y evidenciar el proceso.</p>
+  </section>
+
+  <section>
+    <div class="sec-h"><span class="n">8</span><h2>Encargados y transferencia internacional</h2></div>
+    <ul class="clean">
+      <li><b>Contrato de encargo (DPA) con cada cliente.</b> Fija qué datos trata el proveedor, para qué, con qué medidas de seguridad, y qué pasa al terminar el servicio (devolución o eliminación).</li>
+      <li><b>Transferencia internacional — punto crítico.</b> AWS aún no tiene región en Chile (anunciada para fines de 2026); hoy la más cercana es <b>São Paulo (Brasil)</b>, lo que implica una transferencia internacional con salvaguardas (cláusulas tipo) y debe informarse a los clientes. Azure ya tiene región en Chile (Chile Central). Debe decidirse con criterio legal antes de elegir la nube.</li>
+      <li><b>Subencargados.</b> La nube y otros servicios que toquen datos se listan en <code>encargado_tratamiento</code> y se informan a los clientes, que deben autorizarlos en el DPA.</li>
+    </ul>
+  </section>
+
+  <section>
+    <div class="sec-h"><span class="n">9</span><h2>Modo marca blanca para organismos</h2></div>
+    <p class="lead">Cuando un organismo administrador (una mutualidad o un servicio público) contrata la plataforma y la entrega a sus empresas adherentes, cambian los roles. Hay que definirlos por contrato antes de cargar datos.</p>
+    <div class="cards">
+      <div class="mini"><div class="t">Organismo</div><div class="d">Ofrece el servicio a sus adherentes como parte de su asesoría en prevención. Lo usual es que sea <b>responsable</b> del tratamiento que hace la plataforma, junto con cada empresa respecto de sus trabajadores.</div></div>
+      <div class="mini"><div class="t">Proveedor</div><div class="d">Sigue siendo <b>encargado</b>: trata los datos solo por instrucción del organismo, bajo un DPA firmado con él.</div></div>
+      <div class="mini"><div class="t">Empresa adherente</div><div class="d">Acepta las condiciones de uso del organismo y es responsable de los datos que carga de sus trabajadores.</div></div>
+    </div>
+    <ul class="clean" style="margin-top:14px">
+      <li><b>Vista del organismo, mínima necesaria.</b> Por defecto, el organismo ve indicadores agregados de sus empresas (cumplimiento, certificación). El detalle de personas, y sobre todo los datos de salud, solo se abre si hay una finalidad justificada y queda registrado en la bitácora.</li>
+      <li><b>Separación entre organismos.</b> Ningún organismo ve datos de otro. Lo garantiza la base de datos, no solo la aplicación.</li>
+      <li><b>Organismos públicos.</b> Un servicio público tiene reglas propias de tratamiento de datos y exigencias de ciberseguridad. Además contrata vía Ley de Compras Públicas, que puede exigir residencia de datos en Chile o una instalación dedicada.</li>
+      <li><b>Término del contrato.</b> El DPA debe definir la devolución de los datos a cada empresa o al organismo, y su eliminación en la plataforma.</li>
+    </ul>
+  </section>
+
+  <section>
+    <div class="sec-h"><span class="n">10</span><h2>Checklist de cumplimiento</h2></div>
+    <p class="lead">Estado de implementación (se guarda en este navegador).</p>
+    <div class="check" id="check">
+      <div class="progress"><span id="pcount">0 / 0</span><span class="ptrack"><span class="pfill" id="pfill"></span></span></div>
+    </div>
+  </section>
+
+  <footer>Anexo v3 · producto independiente con marca blanca · Ley 21.719 / Ley 19.628 · orientación de diseño, no asesoría legal · validar con asesoría legal.</footer>
+</div>
+
+<script>
+const CHECKS=[
+  ["Designar al delegado de protección de datos del proveedor","Punto de contacto para clientes y la Agencia"],
+  ["Firmar el contrato de encargo (DPA) con cada empresa cliente","Finalidad, seguridad, término del servicio"],
+  ["Publicar el aviso de privacidad","Finalidad, base, plazos y derechos"],
+  ["Marcar y restringir los datos sensibles de salud","Investigación de accidentes y enfermedades"],
+  ["Implementar el flujo de derechos ARCOP","Con plazos y bitácora"],
+  ["Definir la política de retención por tipo de dato","Anonimizar / eliminar / conservar"],
+  ["Habilitar el procedimiento de brechas","Notificación a la Agencia y a titulares"],
+  ["Listar subencargados (nube) e informarlos a los clientes","Con sus propios DPA firmados"],
+  ["Resolver la transferencia internacional","Región en Chile o salvaguardas, informado a clientes"],
+  ["Activar cifrado, control de acceso por ámbito y bitácora","Medidas técnicas de seguridad"],
+  ["Definir en el contrato con cada organismo quién es responsable","Marca blanca: organismo, empresas y proveedor"],
+  ["Limitar la vista del organismo a indicadores agregados","Detalle de personas solo con finalidad y bitácora"],
+  ["Capacitar a usuarios y comités en protección de datos","Cultura y uso correcto"],
+];
+const esc=s=>String(s).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+let state={};
+try{state=JSON.parse(localStorage.getItem("anx-check")||"{}");}catch(e){}
+const check=document.getElementById("check");
+CHECKS.forEach((c,i)=>{
+  const d=document.createElement("div");d.className="citem"+(state[i]?" on":"");d.dataset.i=i;
+  d.innerHTML=`<span class="box"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M5 12l5 5 9-9"/></svg></span>
+    <span><div class="ct">${esc(c[0])}</div><div class="cd">${esc(c[1])}</div></span>`;
+  check.appendChild(d);
+});
+function upd(){
+  const done=CHECKS.filter((_,i)=>state[i]).length;
+  document.getElementById("pcount").textContent=done+" / "+CHECKS.length;
+  document.getElementById("pfill").style.width=(done/CHECKS.length*100)+"%";
+}
+check.addEventListener("click",e=>{const it=e.target.closest(".citem");if(!it)return;
+  const i=it.dataset.i;state[i]=!state[i];it.classList.toggle("on",!!state[i]);
+  try{localStorage.setItem("anx-check",JSON.stringify(state));}catch(e){}upd();});
+upd();
+
+/* theme */
+(function(){let t=null;try{t=localStorage.getItem("anx-theme");}catch(e){}if(t)document.documentElement.setAttribute("data-theme",t);
+  document.getElementById("themebtn").onclick=()=>{const cur=document.documentElement.getAttribute("data-theme");
+    const dark=cur?cur==="dark":matchMedia("(prefers-color-scheme:dark)").matches;const n=dark?"light":"dark";
+    document.documentElement.setAttribute("data-theme",n);try{localStorage.setItem("anx-theme",n);}catch(e){}};})();
+</script>

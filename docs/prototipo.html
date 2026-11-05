@@ -1,0 +1,583 @@
+<!doctype html>
+<html lang="es">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<style>body{margin:0}[hidden]{display:none!important}</style>
+<meta name="claude:viewport-fit-sides" content="cover">
+<title>Paritario</title>
+<style>
+  /* Layout: fixed sidebar + topbar, scrollable content; views toggled by JS. Prototype with sample data. */
+  :root{
+    --bg:#eef1f3; --surface:#ffffff; --surface-2:#f5f7f8; --border:#dde3e6;
+    --fg:#141b1f; --muted:#5a6b72; --faint:#8697a0;
+    --accent:#0f766e; --accent-soft:#d5ebe8; --accent-fg:#ffffff;
+    --ok:#15803d; --ok-soft:#dcf0e2; --warn:#b45309; --warn-soft:#fbeccf; --crit:#b91c1c; --crit-soft:#f7dada;
+    --shadow:0 1px 2px rgba(16,30,36,.06),0 2px 10px rgba(16,30,36,.05);
+    --r:12px;
+    --f-display:"Archivo","Segoe UI",system-ui,sans-serif;
+    --f-body:"Public Sans","Segoe UI",system-ui,sans-serif;
+    --f-mono:"IBM Plex Mono",ui-monospace,monospace;
+    color-scheme:light;
+  }
+  @media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+    --bg:#0c1114; --surface:#141b1f; --surface-2:#1a2328; --border:#28343a;
+    --fg:#e8eef1; --muted:#9db0b8; --faint:#6b7d85;
+    --accent:#2dd4bf; --accent-soft:#113b38; --accent-fg:#06211e;
+    --ok:#4ade80; --ok-soft:#10301d; --warn:#fbbf24; --warn-soft:#3a2a09; --crit:#f87171; --crit-soft:#3a1414;
+    --shadow:0 1px 2px rgba(0,0,0,.4),0 2px 12px rgba(0,0,0,.35);
+    color-scheme:dark;
+  }}
+  :root[data-theme="dark"]{
+    --bg:#0c1114; --surface:#141b1f; --surface-2:#1a2328; --border:#28343a;
+    --fg:#e8eef1; --muted:#9db0b8; --faint:#6b7d85;
+    --accent:#2dd4bf; --accent-soft:#113b38; --accent-fg:#06211e;
+    --ok:#4ade80; --ok-soft:#10301d; --warn:#fbbf24; --warn-soft:#3a2a09; --crit:#f87171; --crit-soft:#3a1414;
+    --shadow:0 1px 2px rgba(0,0,0,.4),0 2px 12px rgba(0,0,0,.35);
+    color-scheme:dark;
+  }
+  *{box-sizing:border-box}
+  body{background:var(--bg);color:var(--fg);font-family:var(--f-body);line-height:1.5;-webkit-font-smoothing:antialiased}
+  h1,h2,h3{font-family:var(--f-display);text-wrap:balance;margin:0;letter-spacing:-.01em}
+  .mono{font-family:var(--f-mono)}
+  .num{font-variant-numeric:tabular-nums}
+
+  .app{display:grid;grid-template-columns:240px 1fr;min-height:100%}
+  /* Sidebar */
+  .side{background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column;position:sticky;top:0;height:100vh;padding-block:18px}
+  .brand{display:flex;align-items:center;gap:10px;padding:0 20px 18px;border-bottom:1px solid var(--border);margin-bottom:10px}
+  .logo{width:30px;height:30px;border-radius:8px;background:var(--accent);display:grid;place-items:center;color:var(--accent-fg);flex:none}
+  .brand b{font-family:var(--f-display);font-size:18px;letter-spacing:-.02em}
+  .brand small{display:block;color:var(--faint);font-size:11px;letter-spacing:.04em;text-transform:uppercase}
+  nav{display:flex;flex-direction:column;gap:2px;padding:8px 12px;overflow:auto}
+  .nav-lbl{font-size:10.5px;letter-spacing:.09em;text-transform:uppercase;color:var(--faint);padding:12px 8px 4px}
+  .nav-item{display:flex;align-items:center;gap:11px;padding:9px 12px;border-radius:9px;color:var(--muted);font-size:14px;font-weight:500;cursor:pointer;border:none;background:none;width:100%;text-align:left;font-family:inherit}
+  .nav-item:hover{background:var(--surface-2);color:var(--fg)}
+  .nav-item.on{background:var(--accent-soft);color:var(--accent);font-weight:600}
+  .nav-item svg{width:18px;height:18px;flex:none}
+  .nav-item .pill{margin-left:auto;font-size:10.5px;font-weight:700;background:var(--crit-soft);color:var(--crit);padding:1px 7px;border-radius:12px}
+  .side-foot{margin-top:auto;padding:14px 20px 0;border-top:1px solid var(--border)}
+  .userbox{display:flex;align-items:center;gap:10px}
+  .avatar{width:32px;height:32px;border-radius:50%;background:var(--surface-2);border:1px solid var(--border);display:grid;place-items:center;font-weight:700;font-size:13px;color:var(--accent)}
+
+  /* Topbar */
+  main{min-width:0;display:flex;flex-direction:column}
+  .top{position:sticky;top:0;z-index:5;background:color-mix(in srgb,var(--surface) 86%,transparent);backdrop-filter:blur(8px);border-bottom:1px solid var(--border);
+       display:flex;align-items:center;gap:14px;padding:12px max(16px,env(safe-area-inset-right,0)) 12px max(16px,env(safe-area-inset-left,0))}
+  .crumbs{font-size:13px;color:var(--muted);display:flex;align-items:center;gap:7px;min-width:0}
+  .crumbs b{color:var(--fg);font-weight:600}
+  .crumbs .sep{color:var(--faint)}
+  .roleswitch{margin-left:auto;display:flex;gap:4px;background:var(--surface-2);border:1px solid var(--border);border-radius:9px;padding:3px}
+  .roleswitch button{border:none;background:none;font-family:inherit;font-size:12.5px;font-weight:600;color:var(--muted);padding:5px 11px;border-radius:7px;cursor:pointer}
+  .roleswitch button.on{background:var(--surface);color:var(--accent);box-shadow:var(--shadow)}
+  .iconbtn{width:34px;height:34px;border-radius:8px;border:1px solid var(--border);background:var(--surface);color:var(--muted);cursor:pointer;display:grid;place-items:center}
+  .iconbtn:hover{color:var(--fg)}
+
+  .wrap{padding:24px max(16px,env(safe-area-inset-right,0)) 48px max(16px,env(safe-area-inset-left,0));width:100%;max-width:1120px;margin:0 auto}
+  .ph{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-bottom:20px}
+  .ph h1{font-size:26px}
+  .ph p{margin:4px 0 0;color:var(--muted);font-size:13.5px}
+  .btn{font-family:inherit;font-weight:600;font-size:13.5px;padding:9px 15px;border-radius:9px;border:1px solid var(--accent);background:var(--accent);color:var(--accent-fg);cursor:pointer;display:inline-flex;gap:7px;align-items:center}
+  .btn.ghost{background:var(--surface);color:var(--fg);border-color:var(--border)}
+  .btn.sm{padding:6px 11px;font-size:12.5px}
+  .btn svg{width:15px;height:15px}
+
+  /* KPI tiles */
+  .kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:22px}
+  .kpi{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:16px 16px 14px;box-shadow:var(--shadow)}
+  .kpi .lbl{font-size:12px;color:var(--muted);font-weight:600;letter-spacing:.02em;display:flex;align-items:center;gap:7px}
+  .kpi .v{font-family:var(--f-display);font-size:34px;line-height:1.1;margin-top:8px;letter-spacing:-.02em}
+  .kpi .sub{font-size:12px;color:var(--faint);margin-top:3px}
+  .dot{width:8px;height:8px;border-radius:50%;flex:none}
+
+  .grid2{display:grid;grid-template-columns:1.4fr 1fr;gap:16px}
+  .card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);box-shadow:var(--shadow)}
+  .card-h{display:flex;align-items:center;justify-content:space-between;padding:15px 18px;border-bottom:1px solid var(--border);gap:10px;flex-wrap:wrap}
+  .card-h h3{font-size:15px}
+  .card-h a{font-size:12.5px;color:var(--accent);font-weight:600;cursor:pointer}
+  .card-b{padding:8px 18px 16px}
+
+  /* compliance bars */
+  .barrow{display:grid;grid-template-columns:120px 1fr 42px;align-items:center;gap:12px;padding:9px 0;border-bottom:1px solid var(--border)}
+  .barrow:last-child{border-bottom:none}
+  .barrow .rg{font-size:12.5px;color:var(--muted)}
+  .track{height:9px;border-radius:6px;background:var(--surface-2);overflow:hidden}
+  .fill{height:100%;border-radius:6px}
+  .barrow .pc{font-size:12.5px;font-weight:700;text-align:right}
+
+  /* alerts */
+  .alert{display:flex;gap:12px;padding:11px 0;border-bottom:1px solid var(--border);align-items:flex-start}
+  .alert:last-child{border-bottom:none}
+  .alert .ic{width:30px;height:30px;border-radius:8px;display:grid;place-items:center;flex:none}
+  .alert .ti{font-size:13.5px;font-weight:600}
+  .alert .de{font-size:12px;color:var(--muted)}
+
+  /* table */
+  .tablewrap{overflow-x:auto}
+  table{width:100%;border-collapse:collapse;font-size:13.5px;min-width:620px}
+  thead th{text-align:left;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--faint);font-weight:700;padding:11px 14px;border-bottom:1px solid var(--border);white-space:nowrap}
+  tbody td{padding:12px 14px;border-bottom:1px solid var(--border)}
+  tbody tr.clk{cursor:pointer}
+  tbody tr.clk:hover{background:var(--surface-2)}
+  .cname{font-weight:600}
+  .csub{font-size:11.5px;color:var(--faint)}
+
+  .chip{display:inline-flex;align-items:center;gap:6px;font-size:11.5px;font-weight:700;padding:3px 9px;border-radius:20px;white-space:nowrap}
+  .chip.ok{background:var(--ok-soft);color:var(--ok)} .chip.warn{background:var(--warn-soft);color:var(--warn)}
+  .chip.crit{background:var(--crit-soft);color:var(--crit)} .chip.mut{background:var(--surface-2);color:var(--muted)}
+  .chip.gold{background:#f6e6c3;color:#8a6212} .chip.silver{background:#e3e7ea;color:#5c6a72} .chip.bronze{background:#eedcc9;color:#8a5a2c}
+  :root[data-theme="dark"] .chip.gold{background:#3a2f12;color:#e0c070}
+  :root[data-theme="dark"] .chip.silver{background:#2a3137;color:#aeb9c0}
+  :root[data-theme="dark"] .chip.bronze{background:#33251a;color:#cf9a68}
+  @media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .chip.gold{background:#3a2f12;color:#e0c070}:root:not([data-theme="light"]) .chip.silver{background:#2a3137;color:#aeb9c0}:root:not([data-theme="light"]) .chip.bronze{background:#33251a;color:#cf9a68}}
+
+  .filters{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px}
+  .filters input,.filters select{font-family:inherit;font-size:13px;padding:8px 11px;border:1px solid var(--border);border-radius:9px;background:var(--surface);color:var(--fg)}
+  .filters input{flex:1;min-width:160px}
+
+  /* detail */
+  .back{display:inline-flex;align-items:center;gap:6px;font-size:13px;color:var(--muted);cursor:pointer;background:none;border:none;font-family:inherit;margin-bottom:12px;padding:0}
+  .back:hover{color:var(--fg)}
+  .dhead{display:flex;gap:16px;align-items:flex-start;flex-wrap:wrap;margin-bottom:6px}
+  .dhead h1{font-size:24px}
+  .meta{display:flex;gap:18px;flex-wrap:wrap;color:var(--muted);font-size:13px;margin-top:8px}
+  .meta b{color:var(--fg);font-weight:600}
+  .tabs{display:flex;gap:2px;border-bottom:1px solid var(--border);margin:20px 0 18px;overflow-x:auto}
+  .tab{border:none;background:none;font-family:inherit;font-size:13.5px;font-weight:600;color:var(--muted);padding:10px 14px;cursor:pointer;border-bottom:2px solid transparent;white-space:nowrap}
+  .tab.on{color:var(--accent);border-bottom-color:var(--accent)}
+
+  .people{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+  .plist{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);box-shadow:var(--shadow);overflow:hidden}
+  .plist .hd{padding:12px 16px;border-bottom:1px solid var(--border);font-weight:700;font-size:13px;display:flex;justify-content:space-between;align-items:center}
+  .person{display:flex;align-items:center;gap:11px;padding:11px 16px;border-bottom:1px solid var(--border)}
+  .person:last-child{border-bottom:none}
+  .person .av{width:34px;height:34px;border-radius:50%;background:var(--accent-soft);color:var(--accent);display:grid;place-items:center;font-weight:700;font-size:13px;flex:none}
+  .person .nm{font-weight:600;font-size:13.5px}
+  .person .rl{font-size:11.5px;color:var(--muted)}
+  .person .tags{margin-left:auto;display:flex;gap:5px;flex-wrap:wrap;justify-content:flex-end}
+  .person .tag{font-size:10.5px;font-weight:700;color:var(--accent);background:var(--accent-soft);padding:3px 8px;border-radius:14px}
+  .person .tag.afor{color:var(--warn);background:var(--warn-soft)}
+
+  /* meetings timeline */
+  .months{display:grid;grid-template-columns:repeat(6,1fr);gap:8px}
+  .mo{border:1px solid var(--border);border-radius:10px;padding:10px;text-align:center;background:var(--surface)}
+  .mo .mn{font-size:11px;color:var(--faint);text-transform:uppercase;letter-spacing:.05em}
+  .mo .st{margin-top:7px;font-size:11.5px;font-weight:700}
+  .mo.done{border-color:var(--ok);background:var(--ok-soft)} .mo.done .st{color:var(--ok)}
+  .mo.plan{border-style:dashed} .mo.plan .st{color:var(--muted)}
+  .mo.miss{border-color:var(--crit);background:var(--crit-soft)} .mo.miss .st{color:var(--crit)}
+
+  .doc{display:flex;align-items:center;gap:12px;padding:12px 16px;border-bottom:1px solid var(--border)}
+  .doc:last-child{border-bottom:none}
+  .doc .fi{width:34px;height:40px;border-radius:5px;background:var(--crit-soft);color:var(--crit);display:grid;place-items:center;font-size:9px;font-weight:800;flex:none}
+  .doc .nm{font-weight:600;font-size:13.5px}
+  .doc .dt{font-size:11.5px;color:var(--faint)}
+
+  /* kanban */
+  .segtip{font-size:12.5px;color:var(--muted);margin:0 0 14px}
+  .kanban{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;align-items:start}
+  .kcol{background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r);padding:10px;min-width:0}
+  .kcol>.kh{display:flex;align-items:center;gap:8px;padding:4px 6px 10px;font-weight:700;font-size:13px}
+  .kcol>.kh .cnt{margin-left:auto;font-size:11px;color:var(--faint);background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:1px 8px}
+  .kdot{width:9px;height:9px;border-radius:50%;flex:none}
+  .kcard{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:11px 12px;box-shadow:var(--shadow);margin-bottom:9px}
+  .kcard:last-child{margin-bottom:0}
+  .kcard .tt{font-size:13px;font-weight:600;line-height:1.35}
+  .kcard .mt{display:flex;gap:6px;flex-wrap:wrap;margin-top:9px}
+  .kcard .mt .chip{font-size:10.5px;padding:2px 8px}
+  .kcard .cm{font-size:11px;color:var(--faint);margin-top:8px;display:flex;align-items:center;gap:6px}
+
+  .comis{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+  .comcard{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);box-shadow:var(--shadow);overflow:hidden}
+  .comcard .ch{padding:13px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px}
+  .comcard .ch .ic{width:30px;height:30px;border-radius:8px;background:var(--accent-soft);color:var(--accent);display:grid;place-items:center;flex:none}
+  .comcard .ch .nm{font-weight:700;font-size:13.5px;line-height:1.25}
+
+  .empty{text-align:center;padding:40px 20px;color:var(--muted)}
+  .empty svg{width:40px;height:40px;opacity:.4;margin-bottom:10px}
+
+  @media(max-width:860px){ .kpis{grid-template-columns:repeat(2,1fr)} .grid2{grid-template-columns:1fr} .people{grid-template-columns:1fr} .comis{grid-template-columns:1fr} .months{grid-template-columns:repeat(3,1fr)} .kanban{grid-template-columns:1fr} }
+  @media(max-width:680px){
+    .app{grid-template-columns:1fr}
+    .side{position:fixed;left:-260px;transition:left .2s;z-index:40;width:240px;box-shadow:var(--shadow)}
+    .side.open{left:0}
+    .menubtn{display:grid!important}
+    .scrim{position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:30;display:none}
+    .scrim.open{display:block}
+  }
+  .menubtn{display:none}
+  .scrim{display:none}
+</style>
+
+<div class="app">
+  <aside class="side" id="side">
+    <div class="brand">
+      <span class="logo" aria-hidden="true">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 3l7 3v5c0 4.4-3 7.6-7 9-4-1.4-7-4.6-7-9V6l7-3z"/><path d="M9 12l2 2 4-4"/></svg>
+      </span>
+      <span><b id="brandName">Paritario</b><small id="brandSub">Comités · Prototipo</small></span>
+    </div>
+    <nav id="nav">
+      <div class="nav-lbl">General</div>
+      <button class="nav-item on" data-view="dashboard"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/></svg>Panel</button>
+      <button class="nav-item" data-view="comites"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="3.2"/><path d="M22 21v-2a4 4 0 0 0-3-3.8"/><path d="M16 3.3A4 4 0 0 1 16 11"/></svg>Comités</button>
+      <button class="nav-item" data-view="reuniones"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><rect x="3" y="4.5" width="18" height="17" rx="2.5"/><path d="M3 9h18M8 2.5v4M16 2.5v4"/></svg>Reuniones</button>
+      <button class="nav-item" data-view="cert"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><circle cx="12" cy="9" r="5.5"/><path d="M8.5 13.5L7 22l5-2.5L17 22l-1.5-8.5"/></svg>Certificación</button>
+      <div class="nav-lbl org-only" hidden>Organismo</div>
+      <button class="nav-item org-only" data-view="empresas" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M3 21V9l6-4 6 4v12"/><path d="M15 21V12l6 3v6"/><path d="M7 13h4M7 17h4"/></svg>Empresas adheridas</button>
+      <button class="nav-item org-only" data-view="marca" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><circle cx="12" cy="12" r="9"/><path d="M12 3a9 9 0 0 0 0 18M3 12h18"/></svg>Marca e integraciones</button>
+      <div class="nav-lbl">Administración</div>
+      <button class="nav-item" data-view="centros"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M3 21V7l9-4 9 4v14"/><path d="M9 21v-6h6v6M8 10h.01M16 10h.01"/></svg>Centros de trabajo</button>
+      <button class="nav-item" data-view="accesos"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M12 2l7 3v6c0 4-3 7-7 9-4-2-7-5-7-9V5l7-3z"/><path d="M9 11l2 2 4-4"/></svg>Accesos<span class="pill" id="accPill">3</span></button>
+      <button class="nav-item" data-view="usuarios"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg>Usuarios y roles</button>
+    </nav>
+    <div class="side-foot">
+      <div class="userbox">
+        <span class="avatar">MP</span>
+        <span style="min-width:0"><div style="font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">María Paredes</div><div style="font-size:11.5px;color:var(--faint)" id="roleFoot">Administrador de empresa</div></span>
+      </div>
+    </div>
+  </aside>
+  <div class="scrim" id="scrim"></div>
+
+  <main>
+    <div class="top">
+      <button class="iconbtn menubtn" id="menubtn" aria-label="Menú"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M3 12h18M3 18h18"/></svg></button>
+      <div class="crumbs" id="crumbs"><b>Panel</b></div>
+      <div class="roleswitch" id="roleswitch" title="Perfil activo (demo)">
+        <button class="on" data-role="Administrador de empresa">Administrador</button>
+        <button data-role="Coordinador de comité">Coordinador</button>
+        <button data-role="Auditor">Auditor</button>
+        <button data-role="Administrador de organismo" data-org="1">Organismo</button>
+      </div>
+      <button class="iconbtn" id="themebtn" aria-label="Tema"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="4.5"/><path d="M12 2v2.5M12 19.5V22M4.2 4.2l1.8 1.8M18 18l1.8 1.8M2 12h2.5M19.5 12H22M4.2 19.8l1.8-1.8M18 6l1.8-1.8"/></svg></button>
+    </div>
+    <div class="wrap" id="wrap"></div>
+  </main>
+</div>
+
+<script>
+/* ---------- Sample data (synthetic — not real personal data) ---------- */
+const ADH = "Constructora Andes del Sur S.A.";
+// Organismo de ejemplo que contrata la plataforma en marca blanca (datos ficticios)
+const ORG = {nombre:"Mutualidad Ejemplo", marca:"Comités en Línea", dominio:"comites.mutualidad-ejemplo.cl", color:"#2563eb", remitente:"notificaciones@mutualidad-ejemplo.cl"};
+const EMPRESAS = [
+  ["Constructora Andes del Sur S.A.","Construcción",6,88,"oro","activa"],
+  ["Agrícola Valle Central Ltda.","Agricultura",3,92,"plata","activa"],
+  ["Transportes Ruta Norte SpA","Transporte",2,71,null,"activa"],
+  ["Clínica Costa Azul S.A.","Salud",4,96,"oro","activa"],
+  ["Retail Sur Ltda.","Comercio",5,64,"bronce","activa"],
+  ["Pesquera Bahía Austral S.A.","Pesca",2,79,null,"activa"],
+  ["Servicios Mineros Altiplano SpA","Minería",3,85,"plata","activa"],
+  ["Educa Futuro (sostenedora)","Educación",1,0,null,"en implementación"],
+];
+const comites = [
+  {id:1, name:"CPHS Casa Matriz Santiago", suc:"Casa Matriz", reg:"Metropolitana", com:"Santiago", estado:"activo",
+   cert:"oro", vig:"2025–2027", prox:"2026-11-18",
+   meetings:["done","done","done","done","done","done","done","done","done","done","plan","plan"],
+   tit:[["Laura Méndez","Presidenta","empresa"],["Óscar Rivas","Integrante","empresa"],["Pía Soto","Integrante","empresa"],["Hugo Lillo","Integrante","trabajadores"],["Ruth Vega","Integrante","trabajadores"],["Iván Cortés","Integrante","trabajadores"]],
+   sup:[["Diego Fuentes","Secretario","empresa"],["Nadia Rojas","Integrante","empresa"],["Tomás Parra","Integrante","empresa"],["Elsa Muñoz","Integrante","trabajadores"],["Raúl Díaz","Integrante","trabajadores"],["Carla Núñez","Integrante","trabajadores"]],
+   actas:[["Acta de constitución","2025-03-11"],["Acta reunión septiembre 2026","2026-09-09"],["Acta reunión octubre 2026","2026-10-07"]]},
+  {id:2, name:"CPHS Planta Antofagasta", suc:"Planta Norte", reg:"Antofagasta", com:"Antofagasta", estado:"activo",
+   cert:"plata", vig:"2025–2027", prox:"2026-11-12",
+   meetings:["done","done","done","done","done","done","done","miss","done","done","plan","plan"],
+   tit:[["Sergio Ahumada","Presidente","empresa"],["Marta Leiva","Integrante","empresa"],["Pedro Gálvez","Integrante","empresa"],["Ana Ibáñez","Integrante","trabajadores"],["Luis Tapia","Integrante","trabajadores"],["Gloria Pinto","Integrante","trabajadores"]],
+   sup:[["Felipe Cea","Secretario","empresa"],["Rosa Vera","Integrante","empresa"],["Jorge Mora","Integrante","empresa"],["Sara Lagos","Integrante","trabajadores"],["Nico Reyes","Integrante","trabajadores"],["Vale Soto","Integrante","trabajadores"]],
+   actas:[["Acta de constitución","2025-02-20"],["Acta reunión octubre 2026","2026-10-03"]]},
+  {id:3, name:"CPHS Agencia Concepción", suc:"Agencia Biobío", reg:"Del Biobío", com:"Concepción", estado:"activo",
+   cert:"oro", vig:"2026–2028", prox:"2026-11-20",
+   meetings:["plan","plan","plan","plan","plan","plan","plan","plan","plan","plan","plan","plan"],
+   tit:[["Claudia Saldaña","Presidenta","empresa"],["Mario Cuevas","Integrante","empresa"],["Elena Thus","Integrante","empresa"],["Karin Vera","Integrante","trabajadores"],["Felipe Monar","Integrante","trabajadores"],["Cristina Ponce","Integrante","trabajadores"]],
+   sup:[["Ana Castalli","Secretaria","empresa"],["Marly Cid","Integrante","empresa"],["Daniel Sáez","Integrante","empresa"],["Paola Alfaro","Integrante","trabajadores"],["Débora Pozo","Integrante","trabajadores"],["Marcos Cruz","Integrante","trabajadores"]],
+   actas:[["Acta de constitución","2026-05-11"]]},
+  {id:4, name:"CPHS Sucursal Valparaíso", suc:"Sucursal Costa", reg:"Valparaíso", com:"Valparaíso", estado:"activo",
+   cert:"bronce", vig:"2025–2027", prox:"2026-11-25",
+   meetings:["done","done","done","done","miss","done","done","done","miss","done","plan","plan"],
+   tit:[["Rodrigo Pérez","Presidente","empresa"],["Ivonne Salas","Integrante","empresa"],["César Luna","Integrante","empresa"],["Bárbara Ruiz","Integrante","trabajadores"],["Marco Díaz","Integrante","trabajadores"],["Lucía Fierro","Integrante","trabajadores"]],
+   sup:[["Pablo Ortiz","Secretario","empresa"],["Keka Soto","Integrante","empresa"],["Hernán Lara","Integrante","empresa"],["Fran Peña","Integrante","trabajadores"],["Dani Rivas","Integrante","trabajadores"],["Sol Muñoz","Integrante","trabajadores"]],
+   actas:[["Acta de constitución","2025-04-02"],["Acta reunión agosto 2026","2026-08-12"]]},
+  {id:5, name:"CPHS Obra Laguna del Sol", suc:"Obra PA-13", reg:"Metropolitana", com:"Padre Hurtado", estado:"baja",
+   cert:null, vig:"2024–2026", prox:null,
+   meetings:["done","done","done","done","done","done","plan","plan","plan","plan","plan","plan"],
+   tit:[["Jorge Salinas","Presidente","empresa"],["Rita Campos","Integrante","empresa"],["Ema Fica","Integrante","trabajadores"]],
+   sup:[["Luis Pino","Secretario","empresa"],["Ana Soto","Integrante","trabajadores"]],
+   actas:[["Acta de constitución","2024-06-10"],["Acta de disolución","2026-06-30"]]},
+  {id:6, name:"CPHS Policlínico Centinela", suc:"Policlínico", reg:"Antofagasta", com:"Sierra Gorda", estado:"activo",
+   cert:"plata", vig:"2025–2027", prox:"2026-11-14",
+   meetings:["done","done","done","done","done","done","done","done","done","done","plan","plan"],
+   tit:[["Natalia Reinoso","Presidenta","empresa"],["Hugo Bravo","Integrante","empresa"],["Pía Carreño","Integrante","empresa"],["Tito Vera","Integrante","trabajadores"],["Lia Mena","Integrante","trabajadores"],["Omar Díaz","Integrante","trabajadores"]],
+   sup:[["Ruth Cádiz","Secretaria","empresa"],["Max Rubio","Integrante","empresa"],["Vera Lira","Integrante","empresa"],["Pan Soto","Integrante","trabajadores"],["Ke Núñez","Integrante","trabajadores"],["Jon Paz","Integrante","trabajadores"]],
+   actas:[["Acta de constitución","2025-01-15"],["Acta reunión octubre 2026","2026-10-10"]]},
+];
+const MES=["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"];
+const CERT={oro:["Oro","gold"],plata:["Plata","silver"],bronce:["Bronce","bronze"]};
+const ESTADO={activo:["Activo","ok"],baja:["De baja","mut"]};
+
+// Comisiones (DS 44) — asignadas a integrantes del comité
+const COMIS=[
+  ["Investigación de accidentes y enfermedades profesionales","invest"],
+  ["Capacitación y difusión","capac"],
+  ["Inspección y observación","insp"],
+];
+// Programa de trabajo — actividades tipo Kanban (alineadas al DS 44)
+const ACTS=[
+  ["Elaborar y mantener la matriz de riesgos (IPER)","planificado","Trimestral","oblig","Inspección y observación"],
+  ["Inspecciones planeadas de seguridad","ejecucion","Mensual","oblig","Inspección y observación"],
+  ["Investigar accidentes e incidentes y definir medidas","ejecucion","Según evento","oblig","Investigación de accidentes"],
+  ["Capacitar en uso correcto de EPP","planificado","Semestral","oblig","Capacitación y difusión"],
+  ["Difundir el Derecho a Saber (ODI)","cerrado","Anual","oblig","Capacitación y difusión"],
+  ["Verificar prelación de medidas (eliminar/sustituir)","planificado","Trimestral","recom","Inspección y observación"],
+  ["Revisar avance del programa y reportar","ejecucion","Mensual","recom","—"],
+  ["Elaborar plan de emergencia y evacuación","cerrado","Anual","oblig","Capacitación y difusión"],
+];
+const KCOLS=[["planificado","Planificado","var(--muted)"],["ejecucion","En ejecución","var(--warn)"],["cerrado","Cerrado","var(--ok)"]];
+// Solicitudes de acceso (autoservicio) pendientes
+let SOLIC=[
+  ["Camila Herrera","15.223.887-9","Coordinador de comité","CPHS Planta Antofagasta","hace 2 h"],
+  ["Esteban Ruiz","13.908.441-2","Coordinador de comité","CPHS Sucursal Valparaíso","hace 1 día"],
+  ["Paula Gómez","17.552.019-k","Auditor","— (toda la empresa)","hace 3 días"],
+];
+
+/* ---------- helpers ---------- */
+const $=s=>document.querySelector(s), wrap=$("#wrap");
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const inic=n=>n.split(" ").slice(0,2).map(w=>w[0]).join("").toUpperCase();
+const comply=c=>{const d=c.meetings.filter(m=>m==="done").length,due=c.meetings.filter(m=>m!=="plan").length;return due?Math.round(d/due*100):100;};
+const fdate=s=>{if(!s)return"—";const[y,m,d]=s.split("-");return `${d}/${m}/${y}`;};
+
+/* ---------- views ---------- */
+function vDashboard(){
+  const act=comites.filter(c=>c.estado==="activo");
+  const certd=act.filter(c=>c.cert).length;
+  const avg=Math.round(act.reduce((s,c)=>s+comply(c),0)/act.length);
+  const alerts=[];
+  comites.forEach(c=>{
+    const miss=c.meetings.filter(m=>m==="miss").length;
+    if(miss)alerts.push(["crit","Reuniones sin realizar",`${esc(c.name)} — ${miss} reunión(es) no registrada(s) este año`,c.id]);
+    if(c.estado==="activo"&&!c.cert)alerts.push(["warn","Sin certificación vigente",`${esc(c.name)} no tiene auditoría de certificación`,c.id]);
+    if(c.vig&&c.vig.endsWith("2026"))alerts.push(["warn","Vigencia por vencer",`${esc(c.name)} vence su periodo ${esc(c.vig)} — reconstituir`,c.id]);
+  });
+  const regs={};act.forEach(c=>{(regs[c.reg]=regs[c.reg]||[]).push(comply(c));});
+  const barColor=p=>p>=90?"var(--ok)":p>=70?"var(--warn)":"var(--crit)";
+  wrap.innerHTML=`
+    <div class="ph"><div><h1>Panel de control</h1><p>${esc(ADH)} · año 2026 · DS 44</p></div>
+      <button class="btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>Nuevo comité</button></div>
+    <div class="kpis">
+      <div class="kpi"><div class="lbl"><span class="dot" style="background:var(--accent)"></span>Comités activos</div><div class="v num">${act.length}</div><div class="sub">${comites.length} en total · ${comites.length-act.length} de baja</div></div>
+      <div class="kpi"><div class="lbl"><span class="dot" style="background:var(--ok)"></span>Cumplimiento reuniones</div><div class="v num">${avg}%</div><div class="sub">promedio de comités activos</div></div>
+      <div class="kpi"><div class="lbl"><span class="dot" style="background:#caa33a"></span>Certificados</div><div class="v num">${certd}/${act.length}</div><div class="sub">con auditoría vigente</div></div>
+      <div class="kpi"><div class="lbl"><span class="dot" style="background:var(--crit)"></span>Alertas abiertas</div><div class="v num">${alerts.length}</div><div class="sub">requieren atención</div></div>
+    </div>
+    <div class="grid2">
+      <div class="card"><div class="card-h"><h3>Cumplimiento por región</h3><a data-go="comites">Ver comités →</a></div>
+        <div class="card-b">${Object.entries(regs).map(([r,a])=>{const p=Math.round(a.reduce((x,y)=>x+y,0)/a.length);return `<div class="barrow"><span class="rg">${esc(r)}</span><span class="track"><span class="fill" style="width:${p}%;background:${barColor(p)}"></span></span><span class="pc num" style="color:${barColor(p)}">${p}%</span></div>`;}).join("")}</div></div>
+      <div class="card"><div class="card-h"><h3>Alertas</h3></div>
+        <div class="card-b">${alerts.length?alerts.map(a=>`<div class="alert" data-comite="${a[3]}" style="cursor:pointer">
+          <span class="ic" style="background:var(--${a[0]}-soft);color:var(--${a[0]})"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 9v4M12 17h.01M10.3 3.9L2.4 18a2 2 0 0 0 1.7 3h15.8a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/></svg></span>
+          <span><div class="ti">${a[1]}</div><div class="de">${a[2]}</div></span></div>`).join(""):`<div class="empty">Sin alertas 🎉</div>`}</div></div>
+    </div>`;
+}
+
+function vComites(){
+  wrap.innerHTML=`
+    <div class="ph"><div><h1>Comités paritarios</h1><p>${comites.length} comités · ${esc(ADH)}</p></div>
+      <button class="btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>Nuevo comité</button></div>
+    <div class="filters">
+      <input id="q" placeholder="Buscar por nombre, sucursal o comuna…">
+      <select id="fe"><option value="">Todos los estados</option><option value="activo">Activos</option><option value="baja">De baja</option></select>
+      <select id="fr"><option value="">Todas las regiones</option>${[...new Set(comites.map(c=>c.reg))].map(r=>`<option>${esc(r)}</option>`).join("")}</select>
+    </div>
+    <div class="card"><div class="tablewrap"><table>
+      <thead><tr><th>Comité</th><th>Región / Comuna</th><th>Estado</th><th>Cumplimiento</th><th>Certificación</th><th>Vigencia</th></tr></thead>
+      <tbody id="rows"></tbody></table></div></div>`;
+  const draw=()=>{
+    const q=$("#q").value.toLowerCase(),fe=$("#fe").value,fr=$("#fr").value;
+    const rows=comites.filter(c=>(!fe||c.estado===fe)&&(!fr||c.reg===fr)&&(!q||(c.name+c.suc+c.com).toLowerCase().includes(q)));
+    $("#rows").innerHTML=rows.map(c=>{const p=comply(c),[es,ec]=ESTADO[c.estado],ct=c.cert?CERT[c.cert]:null;
+      return `<tr class="clk" data-comite="${c.id}"><td><div class="cname">${esc(c.name)}</div><div class="csub">${esc(c.suc)}</div></td>
+        <td>${esc(c.reg)}<div class="csub">${esc(c.com)}</div></td>
+        <td><span class="chip ${ec}">${es}</span></td>
+        <td><span class="num" style="font-weight:700;color:${p>=90?'var(--ok)':p>=70?'var(--warn)':'var(--crit)'}">${p}%</span></td>
+        <td>${ct?`<span class="chip ${ct[1]}">${ct[0]}</span>`:'<span class="chip mut">—</span>'}</td>
+        <td class="num" style="color:var(--muted)">${esc(c.vig||"—")}</td></tr>`;}).join("")||`<tr><td colspan="6"><div class="empty">Sin resultados</div></td></tr>`;
+  };
+  draw(); $("#q").oninput=draw;$("#fe").onchange=draw;$("#fr").onchange=draw;
+}
+
+let detailTab="integrantes";
+function vComite(id){
+  const c=comites.find(x=>x.id===id);if(!c)return go("comites");
+  const[es,ec]=ESTADO[c.estado],ct=c.cert?CERT[c.cert]:null,p=comply(c);
+  const tabs=[["integrantes","Integrantes"],["comisiones","Comisiones"],["programa","Programa de trabajo"],["cronograma","Reuniones"],["actas","Actas"],["cert","Certificación"]];
+  wrap.innerHTML=`
+    <button class="back" data-go="comites"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>Comités</button>
+    <div class="dhead"><div style="flex:1;min-width:0">
+      <h1>${esc(c.name)}</h1>
+      <div class="meta"><span>Sucursal <b>${esc(c.suc)}</b></span><span>Región <b>${esc(c.reg)}</b></span><span>Comuna <b>${esc(c.com)}</b></span><span>Vigencia <b>${esc(c.vig||"—")}</b></span></div>
+    </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap"><span class="chip ${ec}">${es}</span>${ct?`<span class="chip ${ct[1]}">Certificación ${ct[0]}</span>`:'<span class="chip warn">Sin certificación</span>'}</div></div>
+    <div class="tabs" id="tabs">${tabs.map(t=>`<button class="tab ${t[0]===detailTab?'on':''}" data-tab="${t[0]}">${t[1]}</button>`).join("")}</div>
+    <div id="tabbody"></div>`;
+  $("#tabs").onclick=e=>{const b=e.target.closest(".tab");if(b){detailTab=b.dataset.tab;vComite(id);}};
+  const tb=$("#tabbody");
+
+  if(detailTab==="integrantes"){
+    const rep=a=>a[2]==="empresa"?"Repr. empresa":"Repr. trabajadores";
+    const plist=(title,arr,markAforado)=>{
+      let aforadoIdx=markAforado?arr.findIndex(m=>m[2]==="trabajadores"):-1;
+      return `<div class="plist"><div class="hd"><span>${title}</span><span style="color:var(--faint);font-weight:600">${arr.length}</span></div>
+      ${arr.map((m,i)=>{const tags=[];if(/Presidenta?|Secretari[ao]/.test(m[1]))tags.push(`<span class="tag">${esc(m[1].split(" ")[0])}</span>`);if(i===aforadoIdx)tags.push('<span class="tag afor">Aforado</span>');
+        return `<div class="person"><span class="av">${inic(m[0])}</span><span style="min-width:0"><div class="nm">${esc(m[0])}</div><div class="rl">${esc(m[1])} · ${rep(m)}</div></span><span class="tags">${tags.join("")}</span></div>`;}).join("")}</div>`;};
+    tb.innerHTML=`<p class="segtip">${c.tit.length+c.sup.length} integrantes · ${c.tit.length} titulares y ${c.sup.length} suplentes. Conformación paritaria (igual número de representantes de empresa y de trabajadores). El integrante aforado debe constar en el acta de constitución.</p>
+      <div class="people">${plist("Titulares",c.tit,true)}${plist("Suplentes",c.sup,false)}</div>`;
+
+  } else if(detailTab==="comisiones"){
+    const all=c.tit.concat(c.sup);
+    const pick=i=>all.length?all[i%all.length][0]:"—";
+    tb.innerHTML=`<p class="segtip">Comisiones de trabajo del comité (DS 44). Cada comisión agrupa integrantes y es responsable de un conjunto de actividades del programa.</p>
+      <div class="comis">${COMIS.map((cm,i)=>`<div class="comcard"><div class="ch"><span class="ic"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="8" r="3"/><path d="M15 11a3 3 0 1 0-2-5.2M3 20a6 6 0 0 1 12 0M14 14a6 6 0 0 1 7 6"/></svg></span><span class="nm">${esc(cm[0])}</span></div>
+        <div class="person"><span class="av">${inic(pick(i))}</span><span><div class="nm">${esc(pick(i))}</div><div class="rl">Responsable</div></span></div>
+        <div class="person"><span class="av">${inic(pick(i+3))}</span><span><div class="nm">${esc(pick(i+3))}</div><div class="rl">Integrante</div></span></div></div>`).join("")}
+        <div class="comcard" style="display:grid;place-items:center;border-style:dashed;min-height:140px"><button class="btn ghost sm"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>Añadir comisión</button></div>
+      </div>`;
+
+  } else if(detailTab==="programa"){
+    const clasChip=k=>k==="oblig"?'<span class="chip warn">Obligatoria por ley</span>':'<span class="chip mut">Recomendada</span>';
+    const col=st=>`<div class="kcol"><div class="kh"><span class="kdot" style="background:${KCOLS.find(k=>k[0]===st)[2]}"></span>${KCOLS.find(k=>k[0]===st)[1]}<span class="cnt">${ACTS.filter(a=>a[1]===st).length}</span></div>
+      ${ACTS.filter(a=>a[1]===st).map(a=>`<div class="kcard"><div class="tt">${esc(a[0])}</div>
+        <div class="mt"><span class="chip ${a[3]==='oblig'?'':'mut'}" style="${a[3]==='oblig'?'background:var(--warn-soft);color:var(--warn)':''}">${a[3]==='oblig'?'Obligatoria':'Recomendada'}</span><span class="chip mut">${esc(a[2])}</span></div>
+        <div class="cm"><svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="8" r="3"/><path d="M4 20a5 5 0 0 1 10 0"/></svg>${esc(a[4])}</div></div>`).join("")||'<div style="padding:10px 6px;color:var(--faint);font-size:12px">Sin actividades</div>'}</div>`;
+    tb.innerHTML=`<div class="card-h" style="padding:0 0 12px;border:none"><p class="segtip" style="margin:0">Programa de trabajo según rubro (DS 44). Arrastra las actividades entre estados en el sistema real. Clasificación obligatoria por ley vs. recomendada.</p>
+      <button class="btn sm"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>Añadir actividad</button></div>
+      <div class="kanban">${KCOLS.map(k=>col(k[0])).join("")}</div>`;
+
+  } else if(detailTab==="cronograma"){
+    const done=c.meetings.filter(m=>m==="done").length,miss=c.meetings.filter(m=>m==="miss").length;
+    tb.innerHTML=`<div class="card"><div class="card-h"><h3>Reuniones mensuales · 2026</h3><span class="num" style="font-size:13px;color:${p>=90?'var(--ok)':p>=70?'var(--warn)':'var(--crit)'};font-weight:700">${p}% cumplimiento</span></div>
+      <div class="card-b"><div class="months">${c.meetings.map((m,i)=>{const lbl=m==="done"?"Realizada":m==="miss"?"No realizada":"Planificada";return `<div class="mo ${m}"><div class="mn">${MES[i]}</div><div class="st">${lbl}</div></div>`;}).join("")}</div>
+      <p class="segtip" style="margin:14px 0 0">${done} realizadas · ${miss} no realizadas · ${12-done-miss} planificadas. Según el DS 44, el comité debe reunirse al menos una vez al mes y dejar acta de cada sesión.</p></div></div>`;
+
+  } else if(detailTab==="actas"){
+    tb.innerHTML=`<div class="card"><div class="card-h"><h3>Actas y documentos</h3><button class="btn ghost sm"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 15V3M7 10l5 5 5-5M5 21h14"/></svg>Subir documento</button></div>
+      <div>${c.actas.map(a=>`<div class="doc"><span class="fi">PDF</span><span style="flex:1;min-width:0"><div class="nm">${esc(a[0])}</div><div class="dt">Cargada el ${fdate(a[1])}</div></span><span class="chip ok">Vigente</span></div>`).join("")}</div></div>`;
+
+  } else {
+    tb.innerHTML=ct?`<div class="card"><div class="card-h"><h3>Certificación</h3></div><div class="card-b">
+      <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap"><span class="chip ${ct[1]}" style="font-size:14px;padding:6px 14px">Nivel ${ct[0]}</span>
+      <span style="color:var(--muted);font-size:13.5px">Auditoría vigente · próxima revisión ${fdate(c.prox)}</span></div>
+      <div class="meta" style="margin-top:16px"><span>Auditor <b>Auditor asignado por la empresa</b></span><span>Resultado <b>Aprobado</b></span><span>Norma <b>DS 44</b></span></div></div></div>`
+      :`<div class="card"><div class="card-b"><div class="empty"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="9" r="5.5"/><path d="M8.5 13.5L7 22l5-2.5L17 22l-1.5-8.5"/></svg><div>Este comité no tiene auditoría de certificación registrada.</div><button class="btn" style="margin-top:14px">Solicitar auditoría</button></div></div></div>`;
+  }
+}
+
+function vAccesos(){
+  wrap.innerHTML=`<div class="ph"><div><h1>Solicitudes de acceso</h1><p>Autoservicio · aprueba o rechaza el ingreso de usuarios a tu empresa</p></div></div>
+    <div class="card"><div class="tablewrap"><table>
+      <thead><tr><th>Solicitante</th><th>RUT</th><th>Rol solicitado</th><th>Ámbito</th><th>Solicitado</th><th></th></tr></thead>
+      <tbody id="srows"></tbody></table></div></div>`;
+  const draw=()=>{
+    $("#srows").innerHTML=SOLIC.length?SOLIC.map((s,i)=>`<tr><td class="cname">${esc(s[0])}</td><td class="num mono" style="color:var(--muted)">${esc(s[1])}</td>
+      <td>${esc(s[2])}</td><td style="color:var(--muted)">${esc(s[3])}</td><td class="csub">${esc(s[4])}</td>
+      <td style="white-space:nowrap;text-align:right"><button class="btn sm" data-ap="${i}">Aprobar</button> <button class="btn ghost sm" data-rj="${i}">Rechazar</button></td></tr>`).join("")
+      :`<tr><td colspan="6"><div class="empty">No hay solicitudes pendientes 🎉</div></td></tr>`;
+    $("#accPill").textContent=SOLIC.length;$("#accPill").style.display=SOLIC.length?"":"none";
+  };
+  draw();
+  $("#srows").onclick=e=>{const ap=e.target.closest("[data-ap]"),rj=e.target.closest("[data-rj]");
+    if(ap){SOLIC.splice(+ap.dataset.ap,1);draw();} if(rj){SOLIC.splice(+rj.dataset.rj,1);draw();}};
+}
+
+function vEmpresas(){
+  const act=EMPRESAS.filter(e=>e[5]==="activa");
+  const com=EMPRESAS.reduce((s,e)=>s+e[2],0);
+  const avg=Math.round(act.reduce((s,e)=>s+e[3],0)/act.length);
+  const cert=EMPRESAS.filter(e=>e[4]).length;
+  const col=p=>p>=90?"var(--ok)":p>=70?"var(--warn)":"var(--crit)";
+  wrap.innerHTML=`<div class="ph"><div><h1>Empresas adheridas</h1><p>${esc(ORG.nombre)} · vista consolidada del organismo · datos de ejemplo</p></div>
+      <button class="btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>Incorporar empresa</button></div>
+    <div class="kpis">
+      <div class="kpi"><div class="lbl"><span class="dot" style="background:var(--accent)"></span>Empresas</div><div class="v num">${EMPRESAS.length}</div><div class="sub">${act.length} activas en la plataforma</div></div>
+      <div class="kpi"><div class="lbl"><span class="dot" style="background:var(--accent)"></span>Comités</div><div class="v num">${com}</div><div class="sub">en todas las empresas</div></div>
+      <div class="kpi"><div class="lbl"><span class="dot" style="background:var(--ok)"></span>Cumplimiento promedio</div><div class="v num">${avg}%</div><div class="sub">reuniones del DS 44</div></div>
+      <div class="kpi"><div class="lbl"><span class="dot" style="background:#caa33a"></span>Con certificación</div><div class="v num">${cert}/${EMPRESAS.length}</div><div class="sub">programa del organismo</div></div>
+    </div>
+    <div class="card"><div class="tablewrap"><table>
+      <thead><tr><th>Empresa</th><th>Rubro</th><th>Comités</th><th>Cumplimiento</th><th>Certificación</th><th>Estado</th></tr></thead>
+      <tbody>${EMPRESAS.map(e=>{const ct=e[4]?CERT[e[4]]:null;const impl=e[5]!=="activa";
+        return `<tr><td class="cname">${esc(e[0])}</td><td style="color:var(--muted)">${esc(e[1])}</td><td class="num">${e[2]}</td>
+        <td>${impl?'<span style="color:var(--faint)">—</span>':`<span class="num" style="font-weight:700;color:${col(e[3])}">${e[3]}%</span>`}</td>
+        <td>${ct?`<span class="chip ${ct[1]}">${ct[0]}</span>`:'<span class="chip mut">—</span>'}</td>
+        <td><span class="chip ${impl?"warn":"ok"}">${impl?"En implementación":"Activa"}</span></td></tr>`;}).join("")}</tbody></table></div></div>
+    <p class="segtip" style="margin-top:12px">El organismo ve indicadores de todas sus empresas, pero no puede ver datos de empresas de otros organismos.</p>`;
+}
+
+function vMarca(){
+  const integ=[["Inicio de sesión con el portal del organismo (SSO)","SAML 2.0","ok","Activa"],
+    ["Listado de empresas adherentes","SFTP diario","warn","En prueba"],
+    ["Programa de certificación del organismo","API REST","mut","Pendiente"]];
+  wrap.innerHTML=`<div class="ph"><div><h1>Marca e integraciones</h1><p>Configuración de marca blanca de ${esc(ORG.nombre)} · datos de ejemplo</p></div></div>
+    <div class="grid2">
+      <div class="card"><div class="card-h"><h3>Marca</h3></div><div class="card-b">
+        <div class="meta" style="flex-direction:column;gap:10px;margin-top:6px">
+          <span>Nombre visible <b>${esc(ORG.marca)}</b></span>
+          <span>Dominio <b class="mono">${esc(ORG.dominio)}</b></span>
+          <span>Remitente de correos <b class="mono">${esc(ORG.remitente)}</b></span>
+          <span style="display:flex;align-items:center;gap:8px">Color principal <span style="width:18px;height:18px;border-radius:5px;background:${ORG.color};display:inline-block"></span><b class="mono">${esc(ORG.color)}</b></span>
+        </div></div></div>
+      <div class="card"><div class="card-h"><h3>Integraciones</h3></div><div class="card-b">
+        ${integ.map(i=>`<div class="alert"><span style="flex:1;min-width:0"><div class="ti">${esc(i[0])}</div><div class="de">${esc(i[1])}</div></span><span class="chip ${i[2]}">${i[3]}</span></div>`).join("")}
+      </div></div>
+    </div>`;
+}
+
+function vSimple(title,sub,icon){
+  wrap.innerHTML=`<div class="ph"><div><h1>${title}</h1><p>${sub}</p></div></div>
+    <div class="card"><div class="card-b"><div class="empty">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">${icon}</svg>
+      <div>Módulo del prototipo — aquí iría ${title.toLowerCase()}.</div>
+      <div style="font-size:12.5px;margin-top:6px">En el sistema real este módulo consume la misma API que el resto.</div></div></div></div>`;
+}
+
+/* ---------- router ---------- */
+const TITLES={dashboard:"Panel",comites:"Comités",reuniones:"Reuniones",cert:"Certificación",centros:"Centros de trabajo",empresas:"Empresas adheridas",marca:"Marca e integraciones",accesos:"Accesos",usuarios:"Usuarios y roles"};
+function setCrumb(parts){$("#crumbs").innerHTML=parts.map((p,i)=>i===parts.length-1?`<b>${esc(p)}</b>`:`<span>${esc(p)}</span><span class="sep">/</span>`).join("");}
+function go(view,arg){
+  document.querySelectorAll(".nav-item").forEach(n=>n.classList.toggle("on",n.dataset.view===view));
+  $("#side").classList.remove("open");$("#scrim").classList.remove("open");
+  if(view==="comite"){setCrumb(["Comités",comites.find(c=>c.id===arg)?.name||"Detalle"]);vComite(arg);window.scrollTo(0,0);return;}
+  setCrumb([TITLES[view]||view]);
+  ({dashboard:vDashboard,comites:vComites,accesos:vAccesos,empresas:vEmpresas,marca:vMarca,
+    reuniones:()=>vSimple("Reuniones","Calendario y actas de todas las reuniones",'<rect x="3" y="4.5" width="18" height="17" rx="2.5"/><path d="M3 9h18M8 2.5v4M16 2.5v4"/>'),
+    cert:()=>vSimple("Certificación","Auditorías y niveles de certificación",'<circle cx="12" cy="9" r="5.5"/><path d="M8.5 13.5L7 22l5-2.5L17 22l-1.5-8.5"/>'),
+    centros:()=>vSimple("Centros de trabajo","Centros de trabajo de la empresa, con alias y dotación",'<path d="M3 21V7l9-4 9 4v14"/><path d="M9 21v-6h6v6"/>'),
+    usuarios:()=>vSimple("Usuarios y roles","Cuentas, perfiles y permisos (Administrador, Coordinador, Auditor)",'<circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/>'),
+  }[view]||vDashboard)();
+  window.scrollTo(0,0);
+}
+
+/* ---------- events ---------- */
+$("#nav").onclick=e=>{const b=e.target.closest(".nav-item");if(b)go(b.dataset.view);};
+wrap.addEventListener("click",e=>{
+  if(e.target.closest("[data-ap],[data-rj]"))return;
+  const row=e.target.closest("[data-comite]");if(row){go("comite",+row.dataset.comite);return;}
+  const g=e.target.closest("[data-go]");if(g)go(g.dataset.go);
+});
+$("#roleswitch").onclick=e=>{const b=e.target.closest("button");if(!b)return;
+  $("#roleswitch").querySelectorAll("button").forEach(x=>x.classList.toggle("on",x===b));
+  $("#roleFoot").textContent=b.dataset.role;
+  const org=!!b.dataset.org, root=document.documentElement.style;
+  document.querySelectorAll(".org-only").forEach(el=>el.hidden=!org);
+  if(org){root.setProperty("--accent",ORG.color);root.setProperty("--accent-soft","color-mix(in srgb, "+ORG.color+" 18%, transparent)");root.setProperty("--accent-fg","#ffffff");
+    $("#brandName").textContent=ORG.marca;$("#brandSub").textContent="Marca blanca · ejemplo";go("empresas");}
+  else{["--accent","--accent-soft","--accent-fg"].forEach(v=>root.removeProperty(v));
+    $("#brandName").textContent="Paritario";$("#brandSub").textContent="Comités · Prototipo";
+    if(document.querySelector(".nav-item.on.org-only"))go("dashboard");}};
+$("#menubtn").onclick=()=>{$("#side").classList.add("open");$("#scrim").classList.add("open");};
+$("#scrim").onclick=()=>{$("#side").classList.remove("open");$("#scrim").classList.remove("open");};
+// theme toggle
+(function(){let t=null;try{t=localStorage.getItem("pari-theme");}catch(e){}if(t)document.documentElement.setAttribute("data-theme",t);
+  $("#themebtn").onclick=()=>{const cur=document.documentElement.getAttribute("data-theme");
+    const dark=cur?cur==="dark":matchMedia("(prefers-color-scheme:dark)").matches;const n=dark?"light":"dark";
+    document.documentElement.setAttribute("data-theme",n);try{localStorage.setItem("pari-theme",n);}catch(e){}};})();
+
+go("dashboard");
+</script>

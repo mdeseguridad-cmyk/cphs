@@ -1,0 +1,269 @@
+<!doctype html>
+<html lang="es">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<style>body{margin:0}[hidden]{display:none!important}</style>
+<meta name="claude:viewport-fit-sides" content="cover">
+<title>Arquitectura AWS</title>
+<style>
+  /* Layered AWS reference architecture: edge → app (VPC) → data → shared services. */
+  :root{
+    --bg:#eef1f3; --surface:#ffffff; --surface-2:#f4f7f8; --border:#dde3e6; --border-strong:#c6d0d4;
+    --fg:#131a1e; --muted:#566368; --faint:#869298;
+    --accent:#0f766e; --accent-soft:#d7ece9;
+    --edge:#1d4ed8; --edge-soft:#dde6fb; --app:#0f766e; --app-soft:#d7ece9;
+    --data:#9a3412; --data-soft:#f6e3d6; --sec:#6b21a8; --sec-soft:#ece0f7;
+    --warn:#b45309; --warn-soft:#fbeccf;
+    --shadow:0 1px 2px rgba(16,30,36,.06),0 3px 12px rgba(16,30,36,.05);
+    --f-display:"Archivo","Segoe UI",system-ui,sans-serif;
+    --f-body:"Public Sans","Segoe UI",system-ui,sans-serif;
+    --f-mono:"IBM Plex Mono",ui-monospace,monospace;
+    color-scheme:light;
+  }
+  @media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+    --bg:#0c1114; --surface:#141b1f; --surface-2:#1a2328; --border:#28343a; --border-strong:#3a4a52;
+    --fg:#e8eef1; --muted:#9db0b8; --faint:#6b7d85;
+    --accent:#2dd4bf; --accent-soft:#113b38;
+    --edge:#93b4fd; --edge-soft:#14233f; --app:#5eead4; --app-soft:#0f3b36;
+    --data:#fb923c; --data-soft:#3a2510; --sec:#d8b4fe; --sec-soft:#2a1740;
+    --warn:#fbbf24; --warn-soft:#3a2a09;
+    --shadow:0 1px 2px rgba(0,0,0,.4),0 3px 14px rgba(0,0,0,.35);
+    color-scheme:dark;
+  }}
+  :root[data-theme="dark"]{
+    --bg:#0c1114; --surface:#141b1f; --surface-2:#1a2328; --border:#28343a; --border-strong:#3a4a52;
+    --fg:#e8eef1; --muted:#9db0b8; --faint:#6b7d85;
+    --accent:#2dd4bf; --accent-soft:#113b38;
+    --edge:#93b4fd; --edge-soft:#14233f; --app:#5eead4; --app-soft:#0f3b36;
+    --data:#fb923c; --data-soft:#3a2510; --sec:#d8b4fe; --sec-soft:#2a1740;
+    --warn:#fbbf24; --warn-soft:#3a2a09;
+    --shadow:0 1px 2px rgba(0,0,0,.4),0 3px 14px rgba(0,0,0,.35);
+    color-scheme:dark;
+  }
+  *{box-sizing:border-box}
+  body{background:var(--bg);color:var(--fg);font-family:var(--f-body);line-height:1.55;-webkit-font-smoothing:antialiased}
+  .page{width:100%;max-width:980px;margin:0 auto;padding:28px max(16px,env(safe-area-inset-right,0)) 64px max(16px,env(safe-area-inset-left,0))}
+  h1,h2,h3{font-family:var(--f-display);margin:0;letter-spacing:-.015em;text-wrap:balance}
+  .mono{font-family:var(--f-mono)}
+
+  header.hero{border-bottom:1px solid var(--border);padding-bottom:20px;margin-bottom:18px}
+  .eyebrow{font-size:11.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--accent);font-weight:700}
+  header.hero h1{font-size:28px;margin:8px 0 6px}
+  header.hero p{margin:0;color:var(--muted);font-size:14px;max-width:70ch}
+  .themebtn{float:right;width:36px;height:36px;border-radius:9px;border:1px solid var(--border);background:var(--surface);color:var(--muted);cursor:pointer;display:grid;place-items:center}
+
+  .legend{display:flex;gap:14px;flex-wrap:wrap;margin:16px 0 4px}
+  .lg{display:inline-flex;align-items:center;gap:6px;font-size:11.5px;font-weight:600;color:var(--muted)}
+  .sw{width:11px;height:11px;border-radius:3px;flex:none}
+
+  /* diagram */
+  .diagram{display:flex;flex-direction:column;gap:12px;margin-top:14px}
+  .band{background:var(--surface);border:1px solid var(--border);border-radius:14px;box-shadow:var(--shadow);padding:13px 15px}
+  .band>.bh{font-size:11px;letter-spacing:.07em;text-transform:uppercase;color:var(--faint);font-weight:700;margin-bottom:10px;display:flex;align-items:center;gap:8px}
+  .row{display:flex;gap:10px;flex-wrap:wrap}
+  .node{flex:1;min-width:150px;background:var(--surface-2);border:1px solid var(--border);border-radius:10px;padding:11px 12px;display:flex;gap:10px;align-items:flex-start}
+  .node .ico{width:30px;height:30px;border-radius:8px;display:grid;place-items:center;flex:none;color:#fff}
+  .node .nm{font-size:13px;font-weight:700;line-height:1.2}
+  .node .sv{font-size:11px;color:var(--muted);margin-top:2px}
+  .node .svc{font-family:var(--f-mono);font-size:10.5px;color:var(--faint);margin-top:3px}
+  .ico svg{width:17px;height:17px}
+  .i-edge{background:var(--edge)} .i-app{background:var(--app)} .i-data{background:var(--data)} .i-sec{background:var(--sec)}
+  .node.edge{border-color:color-mix(in srgb,var(--edge) 35%,transparent)}
+  .node.app{border-color:color-mix(in srgb,var(--app) 35%,transparent)}
+  .node.data{border-color:color-mix(in srgb,var(--data) 35%,transparent)}
+  .node.sec{border-color:color-mix(in srgb,var(--sec) 35%,transparent)}
+
+  .flowdown{display:grid;place-items:center;color:var(--faint);font-size:18px;line-height:0;margin:-4px 0}
+
+  /* VPC container */
+  .vpc{border:2px dashed color-mix(in srgb,var(--app) 45%,transparent);border-radius:16px;padding:12px;background:color-mix(in srgb,var(--app-soft) 35%,transparent)}
+  .vpc>.vh{font-size:11px;letter-spacing:.07em;text-transform:uppercase;color:var(--app);font-weight:800;margin:0 2px 10px;display:flex;align-items:center;gap:7px}
+  .subnet{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:11px 12px;margin-bottom:10px}
+  .subnet:last-child{margin-bottom:0}
+  .subnet>.sh{font-size:10.5px;letter-spacing:.05em;text-transform:uppercase;color:var(--faint);font-weight:700;margin-bottom:9px;display:flex;align-items:center;gap:7px}
+  .az{font-size:9.5px;font-weight:700;color:var(--app);background:var(--app-soft);padding:1px 7px;border-radius:12px;margin-left:auto}
+
+  .banner{display:flex;gap:12px;align-items:flex-start;background:var(--warn-soft);border:1px solid color-mix(in srgb,var(--warn) 30%,transparent);border-radius:12px;padding:14px 16px;margin:20px 0;font-size:13.5px}
+  .banner svg{width:20px;height:20px;color:var(--warn);flex:none;margin-top:1px}
+  .banner b{color:var(--warn)}
+
+  section{margin-top:28px}
+  .sec-h{display:flex;align-items:baseline;gap:12px;margin-bottom:10px}
+  .sec-h .n{font-family:var(--f-mono);font-size:13px;color:var(--accent);font-weight:700}
+  .sec-h h2{font-size:18px}
+
+  .flow{display:flex;flex-wrap:wrap;gap:7px;align-items:center}
+  .step{background:var(--surface);border:1px solid var(--border);border-radius:9px;padding:7px 11px;font-size:12px;font-weight:600;box-shadow:var(--shadow)}
+  .arrow{color:var(--faint);font-weight:700}
+
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .card{background:var(--surface);border:1px solid var(--border);border-radius:12px;box-shadow:var(--shadow);padding:14px 16px}
+  .card h3{font-size:13.5px;margin-bottom:7px;color:var(--accent)}
+  .card ul{margin:0;padding-left:17px;display:flex;flex-direction:column;gap:5px}
+  .card li{font-size:12.5px;color:var(--fg)}
+  code{font-family:var(--f-mono);font-size:11.5px;background:var(--surface-2);padding:1px 5px;border-radius:5px;border:1px solid var(--border)}
+
+  footer{margin-top:36px;padding-top:18px;border-top:1px solid var(--border);color:var(--faint);font-size:12px}
+  @media(max-width:640px){header.hero h1{font-size:23px}.grid2{grid-template-columns:1fr}.node{min-width:calc(50% - 5px)}}
+</style>
+
+<div class="page">
+  <header class="hero">
+    <button class="themebtn" id="themebtn" aria-label="Cambiar tema"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="4.5"/><path d="M12 2v2.5M12 19.5V22M4.2 4.2l1.8 1.8M18 18l1.8 1.8M2 12h2.5M19.5 12H22M4.2 19.8l1.8-1.8M18 6l1.8-1.8"/></svg></button>
+    <div class="eyebrow">Arquitectura de referencia</div>
+    <h1>Arquitectura AWS · Sistema de Comités Paritarios</h1>
+    <p>Despliegue sobre Linux con API y SPA desacoplados, base de datos administrada y almacenamiento de objetos. Alta disponibilidad Multi-AZ, cifrado de extremo a extremo y aislamiento de red por VPC. Una sola instalación sirve a todas las empresas cliente y a los organismos que la ofrecen con su propia marca, con los datos aislados, en una cuenta AWS propia del proveedor: sin dependencia de ninguna mutualidad. Diseño preparado para la decisión de residencia de datos (Ley 21.719).</p>
+    <div class="legend">
+      <span class="lg"><span class="sw" style="background:var(--edge)"></span>Borde / entrega</span>
+      <span class="lg"><span class="sw" style="background:var(--app)"></span>Aplicación</span>
+      <span class="lg"><span class="sw" style="background:var(--data)"></span>Datos</span>
+      <span class="lg"><span class="sw" style="background:var(--sec)"></span>Seguridad / servicios</span>
+    </div>
+  </header>
+
+  <div class="diagram">
+    <!-- Users -->
+    <div class="band">
+      <div class="bh">Usuarios</div>
+      <div class="row">
+        <div class="node edge"><span class="ico i-edge"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg></span><span><div class="nm">Navegador web</div><div class="sv">Administrador · Coordinador · Auditor</div></span></div>
+        <div class="node edge"><span class="ico i-edge"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="7" y="2" width="10" height="20" rx="2.5"/><path d="M11 18h2"/></svg></span><span><div class="nm">Móvil / PWA</div><div class="sv">Acceso por QR, integrantes</div></span></div>
+      </div>
+    </div>
+    <div class="flowdown">↓</div>
+
+    <!-- Edge -->
+    <div class="band">
+      <div class="bh">Borde y entrega</div>
+      <div class="row">
+        <div class="node edge"><span class="ico i-edge"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3 3 15 0 18M12 3c-3 3-3 15 0 18"/></svg></span><span><div class="nm">Route 53</div><div class="sv">DNS</div><div class="svc">app.paritario.cl (ejemplo)</div></span></div>
+        <div class="node edge"><span class="ico i-edge"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7h16M4 12h16M4 17h16"/></svg></span><span><div class="nm">CloudFront</div><div class="sv">CDN</div><div class="svc">caché + TLS (ACM)</div></span></div>
+        <div class="node edge"><span class="ico i-edge"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3l7 3v5c0 4.4-3 7.6-7 9-4-1.4-7-4.6-7-9V6l7-3z"/></svg></span><span><div class="nm">AWS WAF</div><div class="sv">Firewall de aplicación</div><div class="svc">reglas gestionadas</div></span></div>
+      </div>
+    </div>
+    <div class="flowdown">↓</div>
+
+    <!-- Front + Auth -->
+    <div class="band">
+      <div class="bh">Front estático e identidad</div>
+      <div class="row">
+        <div class="node edge"><span class="ico i-edge"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7l9-4 9 4-9 4-9-4zM3 7v10l9 4 9-4V7"/></svg></span><span><div class="nm">S3 — SPA</div><div class="sv">React / Angular estático</div><div class="svc">sitio distribuido por CloudFront</div></span></div>
+        <div class="node sec"><span class="ico i-sec"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="10" width="16" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg></span><span><div class="nm">Cognito</div><div class="sv">Identidad, MFA, roles</div><div class="svc">SSO opcional por cliente</div></span></div>
+      </div>
+    </div>
+    <div class="flowdown">↓</div>
+
+    <!-- VPC -->
+    <div class="vpc">
+      <div class="vh"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>VPC — red privada aislada</div>
+
+      <div class="subnet">
+        <div class="sh">Subred pública<span class="az">Multi-AZ</span></div>
+        <div class="row">
+          <div class="node app"><span class="ico i-app"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v18M5 8l7-5 7 5M5 8v8l7 5 7-5V8"/></svg></span><span><div class="nm">Application Load Balancer</div><div class="sv">HTTPS · enrutamiento · sticky sessions</div></span></div>
+          <div class="node app"><span class="ico i-app"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 12h16M12 4v16"/></svg></span><span><div class="nm">NAT Gateway</div><div class="sv">salida controlada a internet</div></span></div>
+        </div>
+      </div>
+
+      <div class="subnet">
+        <div class="sh">Subred privada — aplicación<span class="az">Multi-AZ</span></div>
+        <div class="row">
+          <div class="node app"><span class="ico i-app"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="8" height="8" rx="1.5"/><rect x="13" y="3" width="8" height="8" rx="1.5"/><rect x="3" y="13" width="8" height="8" rx="1.5"/><rect x="13" y="13" width="8" height="8" rx="1.5"/></svg></span><span><div class="nm">ECS Fargate — API</div><div class="sv">ASP.NET Core / Node · contenedores</div><div class="svc">Auto Scaling</div></span></div>
+          <div class="node sec"><span class="ico i-sec"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2L3 14h7l-1 8 10-12h-7l1-8z"/></svg></span><span><div class="nm">Lambda + EventBridge</div><div class="sv">tareas programadas</div><div class="svc">alertas, vencimientos, cierres</div></span></div>
+        </div>
+      </div>
+
+      <div class="subnet">
+        <div class="sh">Subred privada — datos (sin salida a internet)<span class="az">Multi-AZ</span></div>
+        <div class="row">
+          <div class="node data"><span class="ico i-data"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v14c0 1.7 3.6 3 8 3s8-1.3 8-3V5M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3"/></svg></span><span><div class="nm">RDS PostgreSQL</div><div class="sv">base de datos · Multi-AZ</div><div class="svc">cifrada (KMS) · backups</div></span></div>
+          <div class="node data"><span class="ico i-data"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6c0-1.7 3.6-3 8-3s8 1.3 8 3-3.6 3-8 3-8-1.3-8-3zM4 6v12c0 1.7 3.6 3 8 3s8-1.3 8-3V6"/></svg></span><span><div class="nm">ElastiCache Redis</div><div class="sv">sesión y caché</div><div class="svc">escalado horizontal</div></span></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="flowdown">↓</div>
+
+    <!-- Shared services -->
+    <div class="band">
+      <div class="bh">Almacenamiento y servicios transversales</div>
+      <div class="row">
+        <div class="node data"><span class="ico i-data"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7l9-4 9 4-9 4-9-4zM3 7v10l9 4 9-4V7"/></svg></span><span><div class="nm">S3 — Documentos</div><div class="sv">actas, informes, certificados</div><div class="svc">privado · cifrado · versionado</div></span></div>
+        <div class="node sec"><span class="ico i-sec"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="10" width="16" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg></span><span><div class="nm">Secrets Manager · KMS</div><div class="sv">credenciales y cifrado</div></span></div>
+        <div class="node sec"><span class="ico i-sec"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12h4l3 8 4-16 3 8h4"/></svg></span><span><div class="nm">CloudWatch · CloudTrail</div><div class="sv">métricas, logs y auditoría</div></span></div>
+        <div class="node sec"><span class="ico i-sec"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7l9 6 9-6"/></svg></span><span><div class="nm">Amazon SES</div><div class="sv">correos y notificaciones</div></span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="banner">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 9v4M12 17h.01M10.3 3.9L2.4 18a2 2 0 0 0 1.7 3h15.8a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/></svg>
+    <div><b>Residencia de datos (decisión crítica):</b> AWS aún no tiene región en Chile (anunciada para fines de 2026). Hoy la más cercana es <b>South America — São Paulo (<span class="mono">sa-east-1</span>)</b>, lo que implica una <b>transferencia internacional</b> bajo la Ley 21.719 y exige salvaguardas (cláusulas tipo). Alternativas: esperar la región de AWS en Chile o usar un proveedor con región local (Azure Chile Central). Debe informarse a las empresas cliente. Definir con legal antes de fijar la región.</div>
+  </div>
+
+  <section>
+    <div class="sec-h"><span class="n">1</span><h2>Flujo de una petición</h2></div>
+    <div class="flow">
+      <span class="step">Usuario</span><span class="arrow">→</span>
+      <span class="step">Route 53</span><span class="arrow">→</span>
+      <span class="step">CloudFront + WAF</span><span class="arrow">→</span>
+      <span class="step">S3 (SPA) / ALB</span><span class="arrow">→</span>
+      <span class="step">ECS Fargate (API)</span><span class="arrow">→</span>
+      <span class="step">RDS · Redis · S3</span>
+    </div>
+    <p style="font-size:12.5px;color:var(--muted);margin-top:10px">La identidad se valida con Cognito (token). Las tareas asíncronas (recordatorios de reuniones, alertas de vencimiento, cierre de actividades) las dispara EventBridge sobre Lambda, que notifica por SES.</p>
+  </section>
+
+  <section>
+    <div class="sec-h"><span class="n">2</span><h2>Decisiones clave</h2></div>
+    <div class="grid2">
+      <div class="card"><h3>Alta disponibilidad</h3><ul>
+        <li>RDS <b>Multi-AZ</b> con réplica y failover automático.</li>
+        <li>ECS Fargate en ≥2 zonas con Auto Scaling.</li>
+        <li>ALB reparte y aísla instancias caídas.</li></ul></div>
+      <div class="card"><h3>Seguridad</h3><ul>
+        <li>Base de datos <b>sin salida a internet</b> (subred privada).</li>
+        <li>Cifrado en reposo (KMS) y en tránsito (TLS).</li>
+        <li>Secretos fuera del código; acceso por rol IAM.</li>
+        <li>Datos sensibles de salud con acceso reforzado.</li></ul></div>
+      <div class="card"><h3>Escalabilidad</h3><ul>
+        <li>API sin estado: escala horizontal con la demanda.</li>
+        <li>Sesión en Redis → sin dependencia de instancia.</li>
+        <li>CloudFront descarga el tráfico estático.</li></ul></div>
+      <div class="card"><h3>Costos y operación</h3><ul>
+        <li>Fargate/Lambda: se paga por uso, sin servidores.</li>
+        <li>Sin licencias Windows/SQL Server (stack Linux).</li>
+        <li>IaC (Terraform / CloudFormation) para reproducir.</li></ul></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-h"><span class="n">3</span><h2>Multiempresa e independencia</h2></div>
+    <div class="card"><ul>
+      <li><b>Una instalación para todos los clientes:</b> cada registro pertenece a una empresa (<code>empresa_id</code>) y PostgreSQL aplica <i>Row-Level Security</i>, así ninguna empresa ve datos de otra.</li>
+      <li><b>Activos propios:</b> cuenta AWS, dominio (<code>app.paritario.cl</code>, ejemplo), correo SES con SPF/DKIM/DMARC del dominio propio, identidad en Cognito propia y repositorio de código del proveedor.</li>
+      <li><b>SSO opcional:</b> una empresa cliente puede conectar su propio proveedor de identidad (Entra ID, Google) vía SAML/OIDC, sin que la plataforma dependa de él.</li>
+      <li><b>Reproducible:</b> toda la infraestructura en IaC (Terraform o CloudFormation), lo que permite moverla de región o de cuenta sin rehacerla.</li>
+    </ul></div>
+  </section>
+
+  <section>
+    <div class="sec-h"><span class="n">4</span><h2>Marca blanca para organismos</h2></div>
+    <div class="card"><ul>
+      <li><b>Dominio del organismo:</b> el organismo apunta un subdominio suyo (p. ej. <code>comites.organismo.cl</code>) a CloudFront con un registro CNAME; AWS Certificate Manager emite su certificado sin costo. La aplicación reconoce el dominio de entrada y carga la marca de ese organismo (nombre, logo, colores).</li>
+      <li><b>Correos con su remitente:</b> SES verifica el dominio de envío del organismo (SPF, DKIM y DMARC), así las notificaciones salen a nombre del organismo.</li>
+      <li><b>Inicio de sesión con su portal:</b> Cognito federa el proveedor de identidad del organismo (SAML u OIDC), para que sus usuarios entren con la misma cuenta que ya usan.</li>
+      <li><b>Integraciones:</b> listado de adherentes por SFTP (AWS Transfer Family) o API (API Gateway); intercambio con su programa de certificación por API. Las credenciales quedan en Secrets Manager.</li>
+      <li><b>Instalación dedicada (opcional):</b> si un organismo, por ejemplo un servicio público, exige separación física o residencia en Chile, el mismo código de infraestructura (IaC) levanta una instalación exclusiva en otra cuenta o región, sin cambiar la aplicación.</li>
+    </ul></div>
+  </section>
+
+  <footer>Arquitectura de referencia · orientación de diseño · la región definitiva depende de la evaluación legal de residencia de datos (Ley 21.719).</footer>
+</div>
+
+<script>
+(function(){let t=null;try{t=localStorage.getItem("arq-theme");}catch(e){}if(t)document.documentElement.setAttribute("data-theme",t);
+  document.getElementById("themebtn").onclick=()=>{const cur=document.documentElement.getAttribute("data-theme");
+    const dark=cur?cur==="dark":matchMedia("(prefers-color-scheme:dark)").matches;const n=dark?"light":"dark";
+    document.documentElement.setAttribute("data-theme",n);try{localStorage.setItem("arq-theme",n);}catch(e){}};})();
+</script>
