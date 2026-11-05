@@ -65,7 +65,7 @@ Organiza el trabajo del comité en comisiones, cada una responsable de un conjun
 - Crear comisiones personalizadas según necesidad del comité.
 - Asignar integrantes a cada comisión y designar un responsable.
 - Vincular las actividades del programa de trabajo a la comisión que las ejecuta.
-- Registrar en la comisión de investigación cada accidente o enfermedad profesional: tipo, gravedad, folio de la DIAT o DIEP y codificación SISESAT (forma, agente, ubicación de la lesión, agente de enfermedad, causa externa CIE-10), con sus causas inmediatas y básicas y sus medidas correctivas según la prelación del DS 44. Son datos de salud: el organismo solo ve totales, nunca casos ni personas.
+- Registrar en la comisión de investigación cada accidente o enfermedad profesional: tipo, gravedad, folio de la DIAT o DIEP y codificación SISESAT (en accidentes: forma, agentes materiales, naturaleza y ubicación de la lesión, causa externa CIE-10; en enfermedades: diagnóstico CIE-10 y agente causal), con sus causas inmediatas y básicas y sus medidas correctivas según la prelación del DS 44. Son datos de salud: el organismo solo ve totales, nunca casos ni personas.
 
 ## 7. Programa de trabajo
 
@@ -347,7 +347,7 @@ La misma plataforma se ofrece a organismos administradores sin plataforma propia
 Material complementario de este repositorio:
 
 - [Prototipo navegable del sistema](prototipo.html)
-- [Modelo de datos detallado (37 entidades)](modelo-datos.html)
+- [Modelo de datos detallado (38 entidades)](modelo-datos.html)
 - [Anexo de privacidad · Ley 21.719](anexo-privacidad.html)
 - [Diagrama de arquitectura AWS](arquitectura-aws.html)
 - [Esquema de base de datos (PostgreSQL)](../db/schema.sql)

@@ -97,9 +97,9 @@
 
 <div class="page">
   <header class="hero">
-    <div class="eyebrow">Especificación técnica · v5.3</div>
+    <div class="eyebrow">Especificación técnica · v5.4</div>
     <h1>Modelo de datos · Sistema de Comités Paritarios</h1>
-    <p>Esquema relacional de <b>Paritario</b>, plataforma independiente para gestionar Comités Paritarios de Higiene y Seguridad. Funciona en dos modos: <b>venta directa</b> a empresas y <b>marca blanca</b> para organismos administradores (mutualidades o servicios públicos) que entregan la plataforma a sus empresas adherentes con su propia marca. <b>37 entidades</b> en cinco dominios, alineado al <b>DS 44/2024</b> y preparado para la <b>Ley 21.719</b> de protección de datos, con paridad funcional sobre plataformas de referencia del mercado (comisiones, programa de trabajo por rubro, material de apoyo, autoservicio de accesos). Tipos en notación PostgreSQL; aplican igual a SQL Server con equivalencias menores. Las entidades marcadas <span class="tag-new" style="margin:0">nuevo</span> son las sumadas en esta versión.</p>
+    <p>Esquema relacional de <b>Paritario</b>, plataforma independiente para gestionar Comités Paritarios de Higiene y Seguridad. Funciona en dos modos: <b>venta directa</b> a empresas y <b>marca blanca</b> para organismos administradores (mutualidades o servicios públicos) que entregan la plataforma a sus empresas adherentes con su propia marca. <b>38 entidades</b> en cinco dominios, alineado al <b>DS 44/2024</b> y preparado para la <b>Ley 21.719</b> de protección de datos, con paridad funcional sobre plataformas de referencia del mercado (comisiones, programa de trabajo por rubro, material de apoyo, autoservicio de accesos). Tipos en notación PostgreSQL; aplican igual a SQL Server con equivalencias menores. Las entidades marcadas <span class="tag-new" style="margin:0">nuevo</span> son las sumadas en esta versión.</p>
     <div class="toolbar">
       <div class="legend">
         <span class="lg"><span class="kbadge kpk">PK</span>llave primaria</span>
@@ -139,7 +139,7 @@
     </ul></div>
   </section>
 
-  <footer>Especificación v5.3 · producto independiente con marca blanca para organismos · datos y nombres de ejemplo · notación PostgreSQL 16 · paridad funcional de mercado, identidad propia.</footer>
+  <footer>Especificación v5.4 · producto independiente con marca blanca para organismos · datos y nombres de ejemplo · notación PostgreSQL 16 · paridad funcional de mercado, identidad propia.</footer>
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/mermaid/10.9.1/mermaid.min.js"></script>
@@ -268,21 +268,26 @@ const DOMAINS=[
   ]},
  {n:"03b", t:"Investigación de accidentes", s:"Casos investigados por la comisión del comité, con codificación SISESAT, causas y medidas (DS 44).",
   ents:[
-   {name:"codigo_sisesat", desc:"Códigos SISESAT (SUSESO): forma, agente, ubicación de la lesión, agente de enfermedad, CIE-10.", isNew:true, cols:[
-     ["id","bigint","PK",""],["clasificacion","enum","","forma_accidente · agente_material · ubicacion_lesion · agente_enfermedad · causa_externa_cie10"],
-     ["codigo","varchar(10)","","único por clasificación"],["descripcion","varchar(300)","",""],["codigo_padre","varchar(10)","","nivel superior (OIT)"],["vigente","boolean","",""]]},
-   {name:"investigacion_accidente", desc:"Accidente o enfermedad profesional investigado. Datos de salud: acceso reforzado.", isNew:true, cols:[
+   {name:"codigo_sisesat", desc:"Códigos SISESAT (SUSESO): forma, agente, ubicación de la lesión, agente de enfermedad, CIE-10.", cols:[
+     ["id","bigint","PK",""],["clasificacion","enum","","forma (Anexo II) · agente_material (III) · ubicacion_lesion (VI) · causa_externa_cie10 (I) · lesion_cie10 (V) · agente_enfermedad (IX) · enfermedad_cie10"],
+     ["codigo","varchar(10)","","único por clasificación"],["descripcion","varchar(300)","",""],["codigo_padre","varchar(10)","","nivel superior (OIT o categoría CIE-10)"],["grupo","varchar(300)","","agrupación del anexo"],["vigente","boolean","",""]]},
+   {name:"equivalencia_cie10_oit", desc:"Anexo IV: forma y agente OIT sugeridos para cada causa externa CIE-10.", isNew:true, cols:[
+     ["cie10_codigo","varchar(10)","PK","causa externa, p. ej. W015"],["formas_oit","varchar(10)[]","","formas OIT válidas en el Anexo II"],
+     ["agentes_oit","varchar(10)[]","","agentes válidos en el Anexo III"],["texto_forma","varchar(60)","","valor original del anexo"],
+     ["texto_agente","varchar(60)","","valor original del anexo"],["observacion","text","","anomalías del anexo en esta fila"]]},
+   {name:"investigacion_accidente", desc:"Accidente o enfermedad profesional investigado. Datos de salud: acceso reforzado.", cols:[
      ["id","bigint","PK",""],["comite_id","bigint","FK:comite",""],["comision_id","bigint","FK:comision","comisión investigadora"],
      ["sucursal_id","bigint","FK:sucursal",""],["persona_id","bigint","FK:persona","afectado (dato sensible)"],
      ["tipo","enum","","accidente_trabajo · accidente_trayecto · enfermedad_profesional"],["gravedad","enum","","leve · grave · fatal"],
      ["fecha_evento","timestamptz","",""],["folio_denuncia","varchar(40)","","folio DIAT / DIEP"],["descripcion","text","",""],["dias_perdidos","int","",""],
-     ["forma_id","bigint","FK:codigo_sisesat","forma del accidente"],["agente_id","bigint","FK:codigo_sisesat","agente material"],
-     ["ubicacion_lesion_id","bigint","FK:codigo_sisesat",""],["agente_enfermedad_id","bigint","FK:codigo_sisesat","solo enfermedad profesional"],
-     ["causa_externa_id","bigint","FK:codigo_sisesat","CIE-10"],["estado","enum","","abierta · en_analisis · cerrada"],
+     ["forma_id","bigint","FK:codigo_sisesat","forma del accidente (OIT)"],["agente_accidente_id","bigint","FK:codigo_sisesat","agente material del accidente (OIT)"],
+     ["agente_lesion_id","bigint","FK:codigo_sisesat","agente material de la lesión (OIT)"],["naturaleza_lesion_id","bigint","FK:codigo_sisesat","CIE-10 cap. XIX"],
+     ["ubicacion_lesion_id","bigint","FK:codigo_sisesat","OIT, con lateralidad"],["causa_externa_id","bigint","FK:codigo_sisesat","CIE-10 cap. XX"],
+     ["agente_enfermedad_id","bigint","FK:codigo_sisesat","lista europea (solo enfermedad)"],["diagnostico_enfermedad_id","bigint","FK:codigo_sisesat","CIE-10 cap. I–XVIII (solo enfermedad)"],["estado","enum","","abierta · en_analisis · cerrada"],
      ["fecha_cierre","date","",""],["informe_documento_id","bigint","FK:documento",""]]},
-   {name:"investigacion_causa", desc:"Causas inmediatas y básicas.", isNew:true, cols:[
+   {name:"investigacion_causa", desc:"Causas inmediatas y básicas.", cols:[
      ["id","bigint","PK",""],["investigacion_id","bigint","FK:investigacion_accidente",""],["tipo","enum","","inmediata · basica"],["descripcion","text","",""]]},
-   {name:"investigacion_medida", desc:"Medidas correctivas según la prelación del DS 44.", isNew:true, cols:[
+   {name:"investigacion_medida", desc:"Medidas correctivas según la prelación del DS 44.", cols:[
      ["id","bigint","PK",""],["investigacion_id","bigint","FK:investigacion_accidente",""],
      ["jerarquia","enum","","eliminacion · sustitucion · control_ingenieria · control_administrativo · proteccion_personal"],
      ["descripcion","text","",""],["actividad_id","bigint","FK:actividad","actividad del programa que la ejecuta"],
@@ -407,6 +412,7 @@ const ER=`erDiagram
   COMITE ||--o{ INVESTIGACION_ACCIDENTE : investiga
   PERSONA ||--o{ INVESTIGACION_ACCIDENTE : afectado
   CODIGO_SISESAT ||--o{ INVESTIGACION_ACCIDENTE : codifica
+  EQUIVALENCIA_CIE10_OIT }o--o{ CODIGO_SISESAT : sugiere
   INVESTIGACION_ACCIDENTE ||--o{ INVESTIGACION_CAUSA : identifica
   INVESTIGACION_ACCIDENTE ||--o{ INVESTIGACION_MEDIDA : define
   INVESTIGACION_MEDIDA }o--o| ACTIVIDAD : se_ejecuta_en

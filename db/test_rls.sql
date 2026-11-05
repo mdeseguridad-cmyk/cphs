@@ -3,7 +3,7 @@
 --
 -- Uso, sobre una base de prueba vacía:
 --   psql -v ON_ERROR_STOP=1 -f db/schema.sql -f db/seed.sql -f db/seed_comunas.sql \
---        -f db/seed_actividades.sql -f db/test_rls.sql
+--        -f db/seed_actividades.sql -f db/seed_sisesat.sql -f db/test_rls.sql
 --
 -- Cada verificación que falla aborta el script con un mensaje claro.
 -- Todo corre dentro de una transacción que se revierte al final: no deja datos.
@@ -79,7 +79,7 @@ SELECT c.id, 'investigacion', 'Investigación ' || c.nombre, 's3://doc/' || c.no
 INSERT INTO codigo_sisesat (clasificacion, codigo, descripcion) VALUES
     ('forma_accidente', 'PRUEBA-F', 'Forma de prueba'),
     ('agente_material', 'PRUEBA-A', 'Agente de prueba');
-INSERT INTO investigacion_accidente (comite_id, persona_id, tipo, gravedad, fecha_evento, descripcion, dias_perdidos, forma_id, agente_id)
+INSERT INTO investigacion_accidente (comite_id, persona_id, tipo, gravedad, fecha_evento, descripcion, dias_perdidos, forma_id, agente_accidente_id)
 SELECT c.id, p.id, 'accidente_trabajo', 'grave', '2026-03-10 10:30-03', 'Caída desde altura en bodega', 15,
        (SELECT id FROM codigo_sisesat WHERE codigo = 'PRUEBA-F'), (SELECT id FROM codigo_sisesat WHERE codigo = 'PRUEBA-A')
 FROM comite c, persona p WHERE c.nombre = 'C1' AND p.rut = '18181818-2';
@@ -246,10 +246,24 @@ SELECT pg_temp.debe_fallar('coordinador con comité de otra empresa',
        WHERE u.rut = '16161616-8' AND e.razon_social = 'Empresa 1' AND c.nombre = 'C3'$q$);
 SELECT pg_temp.debe_fallar('comisión personalizada sin nombre',
     $q$INSERT INTO comision (comite_id, tipo) SELECT id, 'personalizada' FROM comite WHERE nombre = 'C1'$q$);
+-- Códigos SISESAT oficiales (Anexos II, III y IV) y sugerencias de forma y agente.
+SELECT pg_temp.verificar('SISESAT: 60 formas (Anexo II)', (SELECT count(*) FROM codigo_sisesat WHERE clasificacion = 'forma_accidente' AND codigo NOT LIKE 'PRUEBA%'), 60);
+SELECT pg_temp.verificar('SISESAT: 145 agentes (Anexo III)', (SELECT count(*) FROM codigo_sisesat WHERE clasificacion = 'agente_material' AND codigo NOT LIKE 'PRUEBA%'), 145);
+SELECT pg_temp.verificar('SISESAT: 3300 causas externas (Anexo IV)', (SELECT count(*) FROM codigo_sisesat WHERE clasificacion = 'causa_externa_cie10'), 3300);
+SELECT pg_temp.verificar('SISESAT: caída al mismo nivel W01.0 sugiere la forma 12.1',
+    (SELECT count(*) FROM sugerencias_sisesat('W010') WHERE clasificacion = 'forma_accidente' AND codigo = '12.1'), 1);
+SELECT pg_temp.verificar('SISESAT: W01.0 sugiere el agente 690',
+    (SELECT count(*) FROM sugerencias_sisesat('W010') WHERE clasificacion = 'agente_material' AND codigo = '690'), 1);
+SELECT pg_temp.verificar('SISESAT: agente 234 sugiere sus 6 subcódigos (234.1 a 234.6)',
+    (SELECT count(*) FROM sugerencias_sisesat('V020') WHERE clasificacion = 'agente_material' AND codigo LIKE '234.%'), 6);
+SELECT pg_temp.verificar('SISESAT: equivalencias con anomalía anotada', (SELECT count(*) FROM equivalencia_cie10_oit WHERE observacion IS NOT NULL), 108);
 SELECT pg_temp.debe_fallar('código SISESAT de otra clasificación (agente usado como forma)',
     $q$UPDATE investigacion_accidente SET forma_id = (SELECT id FROM codigo_sisesat WHERE codigo = 'PRUEBA-A')$q$);
 SELECT pg_temp.debe_fallar('enfermedad profesional codificada con forma de accidente',
     $q$UPDATE investigacion_accidente SET tipo = 'enfermedad_profesional'$q$);
+SELECT pg_temp.debe_fallar('accidente con diagnóstico de enfermedad profesional',
+    $q$INSERT INTO codigo_sisesat (clasificacion, codigo, descripcion) VALUES ('enfermedad_cie10', 'PRUEBA-E', 'Diagnóstico de prueba');
+       UPDATE investigacion_accidente SET diagnostico_enfermedad_id = (SELECT id FROM codigo_sisesat WHERE codigo = 'PRUEBA-E')$q$);
 SELECT pg_temp.debe_fallar('investigación cerrada sin fecha de cierre',
     $q$UPDATE investigacion_accidente SET estado = 'cerrada'$q$);
 SELECT pg_temp.debe_fallar('empresa con código de actividad inexistente',

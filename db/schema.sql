@@ -1,6 +1,6 @@
 -- =============================================================================
 -- Paritario — esquema de base de datos (PostgreSQL 16)
--- Modelo de datos v5.3: 37 tablas en 5 dominios.
+-- Modelo de datos v5.4: 38 tablas en 5 dominios.
 --
 --   01 Organización ........... organismo_administrador, organismo,
 --                               integracion_organismo, empresa,
@@ -12,7 +12,8 @@
 --                               material_apoyo, actividad_material, reunion,
 --                               reunion_asistencia, documento,
 --                               nivel_certificacion, auditoria,
---                               codigo_sisesat, investigacion_accidente,
+--                               codigo_sisesat, equivalencia_cie10_oit,
+--                               investigacion_accidente,
 --                               investigacion_causa, investigacion_medida
 --   04 Seguridad y acceso ..... usuario, rol, usuario_rol, solicitud_acceso,
 --                               log_acceso
@@ -68,7 +69,8 @@ CREATE TYPE incidente_severidad       AS ENUM ('baja', 'media', 'alta', 'critica
 CREATE TYPE incidente_estado          AS ENUM ('abierto', 'contenido', 'cerrado');
 CREATE TYPE encargado_tipo            AS ENUM ('nube', 'proveedor', 'subencargado');
 CREATE TYPE sisesat_clasificacion     AS ENUM ('forma_accidente', 'agente_material', 'ubicacion_lesion',
-                                               'agente_enfermedad', 'causa_externa_cie10');
+                                               'causa_externa_cie10', 'lesion_cie10',
+                                               'agente_enfermedad', 'enfermedad_cie10');
 CREATE TYPE siniestro_tipo            AS ENUM ('accidente_trabajo', 'accidente_trayecto', 'enfermedad_profesional');
 CREATE TYPE siniestro_gravedad        AS ENUM ('leve', 'grave', 'fatal');
 CREATE TYPE investigacion_estado      AS ENUM ('abierta', 'en_analisis', 'cerrada');
@@ -370,7 +372,7 @@ CREATE INDEX usuario_rol_usuario_idx ON usuario_rol (usuario_id) WHERE vigente;
 
 -- Coherencia entre el rol y su ámbito, y entre el comité y la empresa.
 CREATE FUNCTION validar_usuario_rol() RETURNS trigger
-LANGUAGE plpgsql AS $$
+LANGUAGE plpgsql SET search_path = paritario, pg_temp AS $$
 DECLARE
     de_organismo boolean;
 BEGIN
@@ -547,21 +549,68 @@ COMMENT ON TABLE reunion_asistencia IS 'Asistencia de cada integrante a una reun
 -- Investigación de accidentes y enfermedades profesionales (comisión del comité)
 -- -----------------------------------------------------------------------------
 
--- Códigos de los anexos del Manual Técnico de Codificación SISESAT (SUSESO):
--- clasificaciones OIT de forma del accidente, agente material y ubicación
--- de la lesión, agente de enfermedad y causa externa CIE-10.
--- Se carga desde los anexos oficiales; el esquema no trae datos.
+-- Códigos del Manual Técnico de Codificación SISESAT (SUSESO), Esquema N°2.
+-- Cada clasificación se carga desde su anexo oficial:
+--   forma_accidente      Forma del accidente, OIT ................ Anexo II
+--   agente_material      Agente material del accidente y de la
+--                        lesión, OIT ............................. Anexo III
+--   ubicacion_lesion     Ubicación anatómica de la lesión, OIT,
+--                        con lateralidad en el tercer carácter ..... Anexo VI
+--   causa_externa_cie10  CIE-10 cap. XX: causa externa e
+--                        intencionalidad ......................... Anexo I
+--   lesion_cie10         CIE-10 cap. XIX: naturaleza de la lesión .. Anexo V
+--   agente_enfermedad    Lista europea de agentes causantes de
+--                        enfermedades profesionales .............. Anexo IX
+--   enfermedad_cie10     CIE-10 cap. I a XVIII: diagnóstico de la
+--                        enfermedad profesional
+-- El esquema no trae datos.
 CREATE TABLE codigo_sisesat (
     id             bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     clasificacion  sisesat_clasificacion NOT NULL,
     codigo         varchar(10)  NOT NULL,
     descripcion    varchar(300) NOT NULL,
     codigo_padre   varchar(10),
+    grupo          varchar(300),
     vigente        boolean NOT NULL DEFAULT true,
     UNIQUE (clasificacion, codigo)
 );
 COMMENT ON TABLE  codigo_sisesat IS 'Códigos de codificación SISESAT (SUSESO) para accidentes y enfermedades profesionales.';
-COMMENT ON COLUMN codigo_sisesat.codigo_padre IS 'Código del nivel superior en clasificaciones jerárquicas (OIT).';
+COMMENT ON COLUMN codigo_sisesat.codigo_padre IS 'Código del nivel superior: forma OIT de 2 dígitos (11 para 11.1), agente OIT (234 para 234.1) o categoría CIE-10 (W01 para W010).';
+COMMENT ON COLUMN codigo_sisesat.grupo IS 'Agrupación con que el anexo presenta el código.';
+
+-- Anexo IV: equivalencias entre la causa externa (CIE-10 cap. XX) y la forma
+-- y el agente material OIT. Permiten sugerir forma y agente al codificar.
+-- Solo se guardan opciones que existen en los Anexos II y III (2018); lo que
+-- el anexo trae y no calza queda anotado en observacion.
+CREATE TABLE equivalencia_cie10_oit (
+    cie10_codigo  varchar(10) PRIMARY KEY,
+    formas_oit    varchar(10)[] NOT NULL DEFAULT '{}',
+    agentes_oit   varchar(10)[] NOT NULL DEFAULT '{}',
+    texto_forma   varchar(60),
+    texto_agente  varchar(60),
+    observacion   text
+);
+COMMENT ON TABLE  equivalencia_cie10_oit IS 'Anexo IV SISESAT: forma y agente OIT aceptables para cada causa externa CIE-10.';
+COMMENT ON COLUMN equivalencia_cie10_oit.formas_oit IS 'Códigos OIT de forma (2 dígitos) válidos en el Anexo II; vacío = sin equivalencia, se codifica directo.';
+COMMENT ON COLUMN equivalencia_cie10_oit.agentes_oit IS 'Códigos de agente válidos en el Anexo III (rangos ya expandidos); vacío = sin equivalencia.';
+COMMENT ON COLUMN equivalencia_cie10_oit.texto_forma IS 'Valor tal como aparece en el Anexo IV.';
+COMMENT ON COLUMN equivalencia_cie10_oit.observacion IS 'Anomalías del Anexo IV para esta fila.';
+
+-- Sugerencias de forma y agente para una causa externa, según el Anexo IV.
+-- Devuelve los códigos de detalle cuyo código OIT figura en la equivalencia.
+CREATE FUNCTION sugerencias_sisesat(p_cie10 varchar) RETURNS TABLE (
+    clasificacion sisesat_clasificacion, codigo varchar, descripcion varchar)
+LANGUAGE sql STABLE SET search_path = paritario, pg_temp AS $$
+    SELECT cs.clasificacion, cs.codigo, cs.descripcion
+    FROM equivalencia_cie10_oit e
+    JOIN codigo_sisesat cs
+      ON (cs.clasificacion = 'forma_accidente'
+          AND coalesce(cs.codigo_padre, cs.codigo) = ANY (e.formas_oit))
+      OR (cs.clasificacion = 'agente_material'
+          AND (cs.codigo = ANY (e.agentes_oit) OR cs.codigo_padre = ANY (e.agentes_oit)))
+    WHERE e.cie10_codigo = p_cie10 AND cs.vigente
+    ORDER BY cs.clasificacion, cs.codigo
+$$;
 
 CREATE TABLE investigacion_accidente (
     id                     bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
@@ -576,19 +625,25 @@ CREATE TABLE investigacion_accidente (
     descripcion            text NOT NULL,
     dias_perdidos          int CHECK (dias_perdidos >= 0),
     forma_id               bigint REFERENCES codigo_sisesat(id),
-    agente_id              bigint REFERENCES codigo_sisesat(id),
+    agente_accidente_id    bigint REFERENCES codigo_sisesat(id),
+    agente_lesion_id       bigint REFERENCES codigo_sisesat(id),
+    naturaleza_lesion_id   bigint REFERENCES codigo_sisesat(id),
     ubicacion_lesion_id    bigint REFERENCES codigo_sisesat(id),
-    agente_enfermedad_id   bigint REFERENCES codigo_sisesat(id),
     causa_externa_id       bigint REFERENCES codigo_sisesat(id),
+    agente_enfermedad_id   bigint REFERENCES codigo_sisesat(id),
+    diagnostico_enfermedad_id bigint REFERENCES codigo_sisesat(id),
     estado                 investigacion_estado NOT NULL DEFAULT 'abierta',
     fecha_cierre           date,
     informe_documento_id   bigint REFERENCES documento(id),
     created_at             timestamptz NOT NULL DEFAULT now(),
     CHECK ((estado = 'cerrada') = (fecha_cierre IS NOT NULL)),
-    -- La enfermedad profesional se codifica por agente de enfermedad; el
-    -- accidente, por forma y agente material.
-    CHECK (tipo = 'enfermedad_profesional' OR agente_enfermedad_id IS NULL),
-    CHECK (tipo <> 'enfermedad_profesional' OR (forma_id IS NULL AND agente_id IS NULL))
+    -- Manual SISESAT: el accidente se codifica por lesión y causa externa;
+    -- la enfermedad profesional, por diagnóstico y agente causal.
+    CHECK (tipo = 'enfermedad_profesional'
+           OR (agente_enfermedad_id IS NULL AND diagnostico_enfermedad_id IS NULL)),
+    CHECK (tipo <> 'enfermedad_profesional'
+           OR num_nonnulls(forma_id, agente_accidente_id, agente_lesion_id,
+                           naturaleza_lesion_id, causa_externa_id) = 0)
 );
 COMMENT ON TABLE  investigacion_accidente IS 'Investigación de un accidente o enfermedad profesional por la comisión del comité. Contiene datos de salud: acceso reforzado.';
 COMMENT ON COLUMN investigacion_accidente.persona_id IS 'Persona afectada. Dato sensible: solo visible con ámbito de empresa o comité.';
@@ -597,16 +652,19 @@ CREATE INDEX investigacion_comite_idx ON investigacion_accidente (comite_id, fec
 
 -- Cada código SISESAT debe venir de la clasificación que corresponde a su columna.
 CREATE FUNCTION validar_codigos_investigacion() RETURNS trigger
-LANGUAGE plpgsql AS $$
+LANGUAGE plpgsql SET search_path = paritario, pg_temp AS $$
 DECLARE
     par record;
 BEGIN
     FOR par IN SELECT * FROM (VALUES
-        (NEW.forma_id,             'forma_accidente'::sisesat_clasificacion),
-        (NEW.agente_id,            'agente_material'),
-        (NEW.ubicacion_lesion_id,  'ubicacion_lesion'),
-        (NEW.agente_enfermedad_id, 'agente_enfermedad'),
-        (NEW.causa_externa_id,     'causa_externa_cie10')) v(id, clas)
+        (NEW.forma_id,                  'forma_accidente'::sisesat_clasificacion),
+        (NEW.agente_accidente_id,       'agente_material'),
+        (NEW.agente_lesion_id,          'agente_material'),
+        (NEW.naturaleza_lesion_id,      'lesion_cie10'),
+        (NEW.ubicacion_lesion_id,       'ubicacion_lesion'),
+        (NEW.causa_externa_id,          'causa_externa_cie10'),
+        (NEW.agente_enfermedad_id,      'agente_enfermedad'),
+        (NEW.diagnostico_enfermedad_id, 'enfermedad_cie10')) v(id, clas)
     LOOP
         IF par.id IS NOT NULL AND NOT EXISTS (
             SELECT 1 FROM codigo_sisesat WHERE id = par.id AND clasificacion = par.clas
