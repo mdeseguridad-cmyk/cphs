@@ -152,7 +152,7 @@
       <li><b>Sin contraseñas que filtrar.</b> Paritario no guarda contraseñas de usuarios: las gestiona el servicio de identidad (Cognito). La aplicación tampoco usa una clave para entrar a la base: se conecta con credenciales temporales de AWS.</li>
       <li><b>Exposición mínima.</b> La aplicación y la base de datos no tienen salida a internet. El componente que envía correos y crea cuentas no tiene acceso a la base. Los archivos son privados y se suben y bajan con enlaces firmados de corta duración.</li>
       <li><b>Minimización en registros.</b> Los registros técnicos se borran a los 30 días y no deben contener datos personales; los correos no incluyen datos sensibles en su cuerpo.</li>
-      <li><b>Confidencialidad.</b> Cada rol ve solo lo de su ámbito, y lo decide la base de datos: un comité de otra empresa no aparece ni se puede abrir. El administrador de empresa ve a todo su personal y gestiona accesos; el coordinador, su comité; el auditor solo lee; el organismo ve indicadores sin personas ni documentos. El administrador ve el nombre de quienes tienen acceso a su empresa, pero no sus datos en comités de otras empresas.</li>
+      <li><b>Confidencialidad.</b> Cada rol ve solo lo de su ámbito, y lo decide la base de datos: un comité de otra empresa no aparece ni se puede abrir. El administrador de empresa ve a todo su personal y gestiona accesos; el coordinador, su comité; el auditor solo lee, salvo la bitácora de accesos, que consulta únicamente el administrador; el organismo ve indicadores sin personas ni documentos. El administrador ve el nombre de quienes tienen acceso a su empresa, pero no sus datos en comités de otras empresas.</li>
       <li><b>Una persona, varias empresas.</b> Un trabajador puede integrar comités de más de una empresa (por ejemplo, un contratista). Se registra una sola vez por su RUT; si ya existe, la nueva empresa lo vincula sin ver ni modificar los datos que cargó la otra.</li>
       <li><b>Datos de salud.</b> Toda investigación de accidentes o enfermedades se marca como dato sensible, aunque quien la suba no lo indique, y queda visible solo para la empresa y el comité. La regla está en la base de datos: rechaza una investigación sin esa marca, venga de donde venga.</li>
       <li><b>Calidad.</b> Catálogos (región/comuna) y validaciones evitan datos erróneos o duplicados.</li>
@@ -234,7 +234,7 @@
     </div>
   </section>
 
-  <footer>Anexo v10 · producto independiente con marca blanca · Ley 21.719 / Ley 19.628 · orientación de diseño, no asesoría legal · validar con asesoría legal.</footer>
+  <footer>Anexo v11 · producto independiente con marca blanca · Ley 21.719 / Ley 19.628 · orientación de diseño, no asesoría legal · validar con asesoría legal.</footer>
 </div>
 
 <script>
