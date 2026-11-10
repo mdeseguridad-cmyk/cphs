@@ -32,9 +32,9 @@ El acceso se controla por rol y por ámbito (empresa y/o comité), de modo que n
 | --- | --- | --- |
 | Administrador de organismo | Todas las empresas del organismo (marca blanca) | Configura marca, dominio e integraciones; incorpora empresas; ve reportes consolidados |
 | Asesor del organismo | Empresas que tiene asignadas | Acompaña a las empresas en su programa de trabajo; lectura de su avance |
-| Administrador de empresa | Toda la empresa | Crea y gestiona comités y centros, aprueba o rechaza accesos, ve todos los reportes |
+| Administrador de empresa | Toda la empresa | Crea y gestiona comités y centros, aprueba o rechaza accesos, ve todos los reportes; es el único que consulta la bitácora de accesos de su empresa |
 | Coordinador de comité | Su(s) comité(s) | Edita integrantes, comisiones, programa de trabajo, reuniones y actas de su comité |
-| Auditor | Según asignación | Realiza auditorías y certificación; lectura del resto de la información |
+| Auditor | Según asignación | Realiza auditorías y certificación; lectura del resto de la información, salvo la bitácora de accesos |
 | Trabajador / titular | Sus propios datos | Consulta su comité y ejerce sus derechos (acceso, rectificación, etc.) |
 
 ## 4. Empresas y centros de trabajo
