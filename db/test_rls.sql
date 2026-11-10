@@ -23,6 +23,7 @@ DO $$ BEGIN
 END $$;
 GRANT USAGE ON SCHEMA paritario TO paritario_app;
 GRANT SELECT, INSERT, UPDATE ON ALL TABLES IN SCHEMA paritario TO paritario_app;
+REVOKE UPDATE ON log_acceso FROM paritario_app;  -- como en cargar.sh
 
 -- -----------------------------------------------------------------------------
 -- Datos de prueba (cargados como dueño)
@@ -295,6 +296,13 @@ SELECT pg_temp.debe_fallar('usuario activo sin cuenta de Cognito',
     $q$UPDATE usuario SET estado = 'activo' WHERE rut = '15151515-0'$q$);
 SELECT pg_temp.debe_fallar('documento disponible sin huella ni tamaño',
     $q$UPDATE documento SET estado = 'disponible' WHERE nombre = 'Investigación C1'$q$);
+INSERT INTO log_acceso (usuario_id, accion, entidad, entidad_id) SELECT id, 'ver', 'documento', 1 FROM usuario LIMIT 1;
+SET ROLE paritario_app;
+SELECT pg_temp.debe_fallar('la aplicación modifica la bitácora de accesos',
+    $q$UPDATE log_acceso SET accion = 'editar'$q$);
+RESET ROLE;
+SELECT pg_temp.debe_fallar('investigación sin marca de datos de salud',
+    $q$UPDATE documento SET contiene_datos_sensibles = false WHERE nombre = 'Investigación C1'$q$);
 SELECT pg_temp.debe_fallar('huella SHA-256 mal formada',
     $q$UPDATE documento SET sha256 = 'abc' WHERE nombre = 'Investigación C1'$q$);
 UPDATE documento SET estado = 'disponible', tamano_bytes = 1024, sha256 = repeat('a', 64)

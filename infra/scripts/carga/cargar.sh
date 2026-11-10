@@ -52,6 +52,8 @@ SELECT format('GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA paritario TO %I', 
 -- Las únicas filas que la aplicación borra: miembros de una comisión (se
 -- reemplazan al editarla). Todo lo demás se marca, nunca se borra.
 SELECT format('GRANT DELETE ON paritario.comision_integrante TO %I', :'app') \gexec
+-- La bitácora de accesos solo se inserta: la aplicación no puede modificarla.
+SELECT format('REVOKE UPDATE ON paritario.log_acceso FROM %I', :'app') \gexec
 -- Funciones de integración (importar empresas y centros, accesos del SSO).
 SELECT format('GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA paritario TO %I', :'app') \gexec
 SELECT format('ALTER DEFAULT PRIVILEGES IN SCHEMA paritario GRANT SELECT, INSERT, UPDATE ON TABLES TO %I', :'app') \gexec

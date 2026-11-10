@@ -97,7 +97,7 @@
 
 <div class="page">
   <header class="hero">
-    <div class="eyebrow">Especificación técnica · v5.7</div>
+    <div class="eyebrow">Especificación técnica · v5.8</div>
     <h1>Modelo de datos · Sistema de Comités Paritarios</h1>
     <p>Esquema relacional de <b>Paritario</b>, plataforma independiente para gestionar Comités Paritarios de Higiene y Seguridad. Funciona en dos modos: <b>venta directa</b> a empresas y <b>marca blanca</b> para organismos administradores (mutualidades o servicios públicos) que entregan la plataforma a sus empresas adherentes con su propia marca. <b>40 entidades</b> en cinco dominios, alineado al <b>DS 44/2024</b> y preparado para la <b>Ley 21.719</b> de protección de datos, con paridad funcional sobre plataformas de referencia del mercado (comisiones, programa de trabajo por rubro, material de apoyo, autoservicio de accesos). Tipos en notación PostgreSQL; aplican igual a SQL Server con equivalencias menores. Las entidades marcadas <span class="tag-new" style="margin:0">nuevo</span> son las sumadas en esta versión.</p>
     <div class="toolbar">
@@ -146,11 +146,12 @@
       <li><b>El administrador ve a sus usuarios (v5.7).</b> <code>personas_con_detalle()</code> incluye a las personas con acceso a las empresas que el usuario administra, para que vea sus nombres al gestionar accesos. Ve solo eso: no sus datos en comités de otras empresas.</li>
       <li><b>Sin contraseñas en la base (v5.5).</b> La identidad la gestiona Cognito: <code>usuario</code> guarda el RUT (nombre de usuario) y el identificador de la cuenta (<code>cognito_sub</code>), nunca una clave. Un usuario invitado pasa a activo en su primer ingreso; uno bloqueado nunca se borra. La aplicación tampoco usa clave para conectarse a la base: entra con tokens de IAM.</li>
       <li><b>Documentos directo a S3 (v5.5).</b> El navegador sube y baja los archivos con URL firmadas, sin pasar por la API. <code>documento</code> nace <code>pendiente</code> y pasa a <code>disponible</code> cuando la API confirma el objeto, con su huella SHA-256, su tamaño y la versión del bucket versionado.</li>
-      <li><b>Datos sensibles identificados.</b> <code>documento.contiene_datos_sensibles</code> marca los archivos con datos de salud (investigación de accidentes y enfermedades profesionales), que reciben acceso reforzado y una retención propia en <code>politica_retencion</code>.</li>
+      <li><b>Datos sensibles identificados.</b> <code>documento.contiene_datos_sensibles</code> marca los archivos con datos de salud, que reciben acceso reforzado y una retención propia en <code>politica_retencion</code>. Desde v5.8 la base exige la marca en toda investigación de accidentes o enfermedades: no depende de que la aplicación o quien sube el archivo lo recuerde.</li>
+      <li><b>Bitácora que no se altera (v5.8).</b> <code>log_acceso</code> registra quién vio, creó o editó integrantes, asistencia y documentos, y cuándo. La aplicación puede agregar entradas pero no modificarlas. Falta fijar su plazo de conservación en <code>politica_retencion</code>.</li>
     </ul></div>
   </section>
 
-  <footer>Especificación v5.7 · producto independiente con marca blanca para organismos · datos y nombres de ejemplo · notación PostgreSQL 16 · paridad funcional de mercado, identidad propia.</footer>
+  <footer>Especificación v5.8 · producto independiente con marca blanca para organismos · datos y nombres de ejemplo · notación PostgreSQL 16 · paridad funcional de mercado, identidad propia.</footer>
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/mermaid/10.9.1/mermaid.min.js"></script>
@@ -278,7 +279,7 @@ const DOMAINS=[
      ["sha256","char(64)","","huella para verificar integridad (v5.5)"],
      ["mime","varchar(80)","",""],["tamano_bytes","bigint","","obligatorio si está disponible"],
      ["fecha_documento","date","",""],["fecha_carga","timestamptz","",""],
-     ["contiene_datos_sensibles","boolean","","salud: investigación de accidentes (nuevo)"],
+     ["contiene_datos_sensibles","boolean","","datos de salud; obligatorio en investigaciones (v5.8)"],
      ["vigente","boolean","",""],["cargado_por","bigint","FK:usuario",""]]},
    {name:"nivel_certificacion", desc:"Catálogo de niveles de certificación y sus criterios.", cols:[
      ["id","smallint","PK",""],["organismo_id","bigint","FK:organismo","programa propio del organismo; nulo = general"],["codigo","varchar(20)","","único por organismo"],["nombre","varchar(80)","",""],
@@ -322,7 +323,7 @@ const DOMAINS=[
    {name:"usuario", desc:"Cuenta de acceso. Contraseñas y MFA los gestiona Cognito: aquí no se guarda ninguna clave.", cols:[
      ["id","bigint","PK",""],["persona_id","bigint","FK:persona","nulo para cuentas de servicio"],
      ["rut","varchar(12)","UQ","nombre de usuario en Cognito"],["cognito_sub","uuid","UQ","cuenta en Cognito; se completa en el primer ingreso (v5.5)"],
-     ["estado","enum","","invitado · activo · bloqueado; activo exige cognito_sub (v5.5)"],["mfa_habilitado","boolean","","copia informativa de Cognito"],["ultimo_acceso","timestamptz","",""],["created_at","timestamptz","",""]]},
+     ["estado","enum","","invitado · activo · bloqueado; activo exige cognito_sub. Bloqueado impide el ingreso de inmediato: la API lo revisa en cada solicitud"],["mfa_habilitado","boolean","","copia informativa de Cognito"],["ultimo_acceso","timestamptz","",""],["created_at","timestamptz","",""]]},
    {name:"rol", desc:"Rol funcional del sistema.", cols:[
      ["id","smallint","PK",""],["codigo","varchar(20)","UQ","ADMIN_ORGANISMO · ASESOR_ORGANISMO · ADMIN_EMPRESA · COORDINADOR · AUDITOR"],["nombre","varchar(80)","",""],["descripcion","varchar(200)","",""]]},
    {name:"rol_externo", desc:"Rol que envía el SSO de un cliente → rol de empresa de Paritario.", isNew:true, cols:[
@@ -341,10 +342,10 @@ const DOMAINS=[
      ["empresa_id","bigint","FK:empresa",""],["rol_solicitado_id","smallint","FK:rol",""],["comite_id","bigint","FK:comite","ámbito pedido"],
      ["estado","enum","","pendiente · aprobada · rechazada"],["resuelta_por","bigint","FK:usuario",""],
      ["fecha_solicitud","timestamptz","",""],["fecha_resolucion","timestamptz","",""]]},
-   {name:"log_acceso", desc:"Bitácora de acceso a datos personales (Ley 21.719).", cols:[
+   {name:"log_acceso", desc:"Bitácora de acceso a datos personales (Ley 21.719). Solo se inserta: la aplicación no puede modificarla (v5.8).", cols:[
      ["id","bigint","PK",""],["usuario_id","bigint","FK:usuario",""],
      ["accion","enum","","login · ver · crear · editar · eliminar · exportar"],
-     ["entidad","varchar(60)","","tabla afectada"],["entidad_id","bigint","",""],
+     ["entidad","varchar(60)","","tabla afectada: hoy comite_integrante, reunion_asistencia y documento"],["entidad_id","bigint","",""],
      ["ip","inet","",""],["user_agent","varchar(300)","",""],["timestamp","timestamptz","",""]]},
   ]},
  {n:"05", t:"Cumplimiento y privacidad", s:"Soporte a la Ley 21.719: derechos de titulares, retención, brechas y encargados.",

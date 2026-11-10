@@ -1,6 +1,6 @@
 -- =============================================================================
 -- Paritario — esquema de base de datos (PostgreSQL 16)
--- Modelo de datos v5.7: 40 tablas en 5 dominios.
+-- Modelo de datos v5.8: 40 tablas en 5 dominios.
 --
 --   01 Organización ........... organismo_administrador, organismo, empresa,
 --                               sucursal, integracion, rol_externo,
@@ -493,7 +493,7 @@ CREATE TABLE log_acceso (
     user_agent  varchar(300),
     "timestamp" timestamptz NOT NULL DEFAULT now()
 );
-COMMENT ON TABLE log_acceso IS 'Bitácora de acceso a datos personales (Ley 21.719). Solo se inserta; nunca se modifica.';
+COMMENT ON TABLE log_acceso IS 'Bitácora de acceso a datos personales (Ley 21.719). La aplicación registra ver, crear y editar sobre comite_integrante, reunion_asistencia y documento. Solo se inserta: la aplicación no puede modificarla. Su plazo de conservación se define en politica_retencion.';
 CREATE INDEX log_acceso_usuario_idx ON log_acceso (usuario_id, "timestamp");
 CREATE INDEX log_acceso_entidad_idx ON log_acceso (entidad, entidad_id);
 
@@ -566,13 +566,15 @@ CREATE TABLE documento (
     contiene_datos_sensibles  boolean NOT NULL DEFAULT false,
     vigente                   boolean NOT NULL DEFAULT true,
     cargado_por               bigint REFERENCES usuario(id),
-    CHECK (estado = 'pendiente' OR (sha256 IS NOT NULL AND tamano_bytes IS NOT NULL))
+    CHECK (estado = 'pendiente' OR (sha256 IS NOT NULL AND tamano_bytes IS NOT NULL)),
+    -- Una investigación de accidentes o enfermedades siempre tiene datos de salud.
+    CHECK (tipo <> 'investigacion' OR contiene_datos_sensibles)
 );
 COMMENT ON TABLE  documento IS 'Acta, certificado u otro archivo del comité. El binario vive en S3; aquí solo su ruta.';
 COMMENT ON COLUMN documento.estado IS 'El navegador sube el archivo directo a S3 con una URL firmada: el registro nace pendiente y pasa a disponible cuando la API confirma el objeto.';
 COMMENT ON COLUMN documento.archivo_version IS 'Versión del objeto en el bucket versionado: fija qué archivo corresponde a este registro.';
 COMMENT ON COLUMN documento.sha256 IS 'Huella del archivo, para verificar su integridad.';
-COMMENT ON COLUMN documento.contiene_datos_sensibles IS 'Datos de salud (investigación de accidentes y enfermedades): acceso reforzado.';
+COMMENT ON COLUMN documento.contiene_datos_sensibles IS 'Datos de salud: acceso reforzado. Obligatorio en las investigaciones de accidentes y enfermedades.';
 CREATE INDEX documento_comite_idx ON documento (comite_id);
 
 CREATE TABLE actividad (
