@@ -319,6 +319,38 @@ SELECT pg_temp.verificar('cumplimiento: febrero vencido sin registro baja C1 a 5
     (SELECT (exigidas * 1000 + porcentaje * 10)::bigint FROM v_cumplimiento_reuniones v JOIN comite c ON c.id = v.comite_id
      WHERE c.nombre = 'C1' AND v.anio = 2026), 2500);
 
+-- Bitácora de accesos separada por empresa: la lee solo su administrador y
+-- nadie escribe a nombre de otro ni fuera de su ámbito.
+INSERT INTO log_acceso (usuario_id, empresa_id, accion, entidad, entidad_id)
+SELECT u.id, e.id, 'ver', 'comite', 1 FROM usuario u, empresa e
+WHERE u.rut = '15151515-0' AND e.razon_social IN ('Empresa 1', 'Empresa 3');
+CREATE FUNCTION pg_temp.como(p_rut text) RETURNS void LANGUAGE sql AS $$
+    SELECT set_config('app.usuario_id', (SELECT id::text FROM t_usuarios WHERE rut = p_rut), true)
+$$;
+GRANT EXECUTE ON FUNCTION pg_temp.como(text) TO paritario_app;
+CREATE TEMP TABLE t_empresas AS SELECT razon_social, id FROM empresa;
+GRANT SELECT ON t_empresas TO paritario_app;
+SET ROLE paritario_app;
+SELECT pg_temp.como('15151515-0');
+SELECT pg_temp.verificar('bitácora: el administrador de Empresa 1 ve solo las entradas de su empresa',
+    (SELECT count(*) FROM log_acceso WHERE empresa_id = (SELECT id FROM empresa WHERE razon_social = 'Empresa 1')) * 10
+    + (SELECT count(*) FROM log_acceso), 11);
+INSERT INTO log_acceso (usuario_id, empresa_id, accion, entidad, entidad_id)
+SELECT usuario_actual(), id, 'ver', 'documento', 1 FROM empresa WHERE razon_social = 'Empresa 1';
+SELECT pg_temp.verificar('bitácora: registra a su nombre en su empresa', (SELECT count(*) FROM log_acceso), 2);
+SELECT pg_temp.debe_fallar('bitácora: registrar a nombre de otro usuario',
+    $q$INSERT INTO log_acceso (usuario_id, empresa_id, accion) SELECT id, NULL, 'ver' FROM t_usuarios WHERE rut = '17171717-5'$q$);
+SELECT pg_temp.debe_fallar('bitácora: registrar en una empresa fuera de su ámbito',
+    $q$INSERT INTO log_acceso (usuario_id, empresa_id, accion) SELECT usuario_actual(), id, 'ver' FROM t_empresas WHERE razon_social = 'Empresa 3'$q$);
+SELECT pg_temp.como('17171717-5');
+SELECT pg_temp.verificar('bitácora: el administrador de Empresa 3 ve solo la suya', (SELECT count(*) FROM log_acceso), 1);
+SELECT pg_temp.como('16161616-8');
+SELECT pg_temp.verificar('bitácora: un coordinador no la consulta', (SELECT count(*) FROM log_acceso), 0);
+SELECT pg_temp.como('14141414-3');
+SELECT pg_temp.verificar('bitácora: el organismo no la consulta', (SELECT count(*) FROM log_acceso), 0);
+RESET ROLE;
+SELECT set_config('app.usuario_id', '', true);
+
 -- Vista de paridad: C1 tiene un solo titular de trabajadores, no es paritario.
 SELECT pg_temp.verificar('paridad: C1 no es paritario',
     (SELECT count(*) FROM v_paridad_comite v JOIN comite c ON c.id = v.comite_id

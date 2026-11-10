@@ -134,7 +134,8 @@ export function rutasComites(app: FastifyInstance, ctx: Contexto): void {
           ORDER BY ci.vigente DESC, ci.tipo, ci.representacion, p.apellidos`,
         [cm.id],
       );
-      if (filas.length) await bitacora(c, s.usuarioId, "ver", "comite_integrante", cm.id);
+      // Entrada "ver comite": vio la lista de integrantes del comité.
+      if (filas.length) await bitacora(c, s.usuarioId, "ver", "comite", cm.id, cm.id);
       return filas;
     }),
   );
@@ -160,7 +161,7 @@ export function rutasComites(app: FastifyInstance, ctx: Contexto): void {
         fecha_fuero: d.fecha_fuero,
         fecha_inicio: d.fecha_inicio,
       });
-      await bitacora(c, s.usuarioId, "crear", "comite_integrante", integranteId);
+      await bitacora(c, s.usuarioId, "crear", "comite_integrante", integranteId, cm.id);
       return integranteId;
     });
     return rep.status(201).send({ id: nuevo });
@@ -174,7 +175,7 @@ export function rutasComites(app: FastifyInstance, ctx: Contexto): void {
       await comiteEditable(c, s, ci.comite_id);
       const d = datos(integranteCambio, req.body);
       await actualizar(c, "comite_integrante", integranteId, d);
-      await bitacora(c, s.usuarioId, "editar", "comite_integrante", integranteId);
+      await bitacora(c, s.usuarioId, "editar", "comite_integrante", integranteId, ci.comite_id);
       return { id: integranteId };
     }),
   );
@@ -188,7 +189,7 @@ export function rutasComites(app: FastifyInstance, ctx: Contexto): void {
       await comiteEditable(c, s, ci.comite_id);
       const d = datos(z.object({ fecha_termino: fecha }), req.body);
       await actualizar(c, "comite_integrante", integranteId, { fecha_termino: d.fecha_termino, vigente: false, es_aforado: false, fecha_fuero: null });
-      await bitacora(c, s.usuarioId, "editar", "comite_integrante", integranteId);
+      await bitacora(c, s.usuarioId, "editar", "comite_integrante", integranteId, ci.comite_id);
       return { id: integranteId, vigente: false };
     }),
   );

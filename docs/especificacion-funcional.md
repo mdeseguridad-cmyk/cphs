@@ -111,7 +111,7 @@ Permite que las empresas gestionen sus propios accesos, con aprobación del admi
 - Enviar una **solicitud de acceso** indicando rol y ámbito (empresa o comité).
 - El administrador **aprueba o rechaza** las solicitudes; al aprobar, se genera el acceso con su ámbito.
 - Gestionar usuarios y roles vigentes. Cada cuenta está **invitada** (aún no ingresa), **activa** o **bloqueada**; se puede reenviar la invitación, bloquear y desbloquear. Bloquear cierra las sesiones abiertas e impide el ingreso de inmediato. La sesión vive solo en la pestaña del navegador y se cierra al cerrarla. Las cuentas nunca se borran, para conservar quién hizo cada cosa.
-- Toda operación sobre datos personales queda en la bitácora de acceso. La empresa podrá consultar quién vio o cambió cada caso (está en el prototipo; se implementa después del MVP). Antes, la bitácora debe quedar separada por empresa como el resto de los datos, para que ninguna vea entradas de otra.
+- Toda operación sobre datos personales queda en la bitácora de acceso. La bitácora ya está separada por empresa: solo el administrador de cada empresa puede consultar sus entradas, y nadie puede registrar a nombre de otro. Falta la pantalla para consultarla (está en el prototipo; se implementa después del MVP).
 
 ## 11. Panel, reportes y notificaciones
 
@@ -144,7 +144,7 @@ El sistema se diseña para cumplir el marco de seguridad y salud en el trabajo y
 - **DS 44/2024** — Reglamento sobre gestión preventiva de los riesgos laborales: programa de trabajo, clasificación de actividades obligatorias y prelación de medidas.
 - **Ley 16.744** — marco de los comités paritarios: constitución, conformación y reuniones.
 - **Ley 21.719** — protección de datos personales (vigente desde el 1 de diciembre de 2026, con proyecto de postergación a 2027 en trámite): cada empresa cliente como responsable (en marca blanca, también el organismo) y el proveedor como encargado, base de licitud por obligación legal, derechos ARCOP, retención, notificación de brechas, encargados y transferencia internacional. El detalle está en el [Anexo de Privacidad](anexo-privacidad.html).
-- **Medidas ya aplicadas en el MVP** — confidencialidad por rol decidida por la base de datos (un comité de otra empresa no aparece), bitácora de accesos a datos personales que no se puede alterar, investigaciones marcadas como datos de salud por regla de la base de datos, personas compartidas entre empresas sin exponer sus datos, sesiones acotadas a la pestaña y pruebas solo con datos ficticios. Antes de cargar personas reales falta fijar el plazo de conservación de la bitácora y recorrer el piloto con cada rol. Para producción, la bitácora debe protegerse también frente al administrador técnico de la base, copiándola a un almacenamiento que no admita cambios.
+- **Medidas ya aplicadas en el MVP** — confidencialidad por rol decidida por la base de datos (un comité de otra empresa no aparece), bitácora de accesos a datos personales que no se puede alterar y está separada por empresa, investigaciones marcadas como datos de salud por regla de la base de datos, personas compartidas entre empresas sin exponer sus datos, sesiones acotadas a la pestaña y pruebas solo con datos ficticios. Antes de cargar personas reales falta fijar el plazo de conservación de la bitácora y recorrer el piloto con cada rol. Para producción, la bitácora debe protegerse también frente al administrador técnico de la base, copiándola a un almacenamiento que no admita cambios.
 
 Esta sección es orientación de diseño y debe validarse con asesoría legal.
 

@@ -94,7 +94,7 @@ export function rutasDocumentos(app: FastifyInstance, ctx: Contexto): void {
         throw invalido("El archivo subido no coincide con el tamaño o la huella declarados");
       }
       await actualizar(c, "documento", docId, { estado: "disponible", archivo_version: cab.version });
-      await bitacora(c, s.usuarioId, "crear", "documento", docId);
+      await bitacora(c, s.usuarioId, "crear", "documento", docId, doc.comite_id);
       return { id: docId, estado: "disponible" };
     }),
   );
@@ -102,9 +102,9 @@ export function rutasDocumentos(app: FastifyInstance, ctx: Contexto): void {
   app.get("/api/documentos/:id/descarga", (req) =>
     ctx.tx(req, async (c, s) => {
       const docId = id(req);
-      const doc = await uno<{ archivo_key: string; archivo_version: string | null; nombre: string; mime: string | null; estado: string }>(
+      const doc = await uno<{ comite_id: number; archivo_key: string; archivo_version: string | null; nombre: string; mime: string | null; estado: string }>(
         c,
-        "SELECT archivo_key, archivo_version, nombre, mime, estado FROM documento WHERE id = $1",
+        "SELECT comite_id, archivo_key, archivo_version, nombre, mime, estado FROM documento WHERE id = $1",
         [docId],
       );
       if (!doc) throw noEncontrado("Documento no encontrado");
@@ -114,7 +114,7 @@ export function rutasDocumentos(app: FastifyInstance, ctx: Contexto): void {
         nombre: doc.nombre + extension,
         version: doc.archivo_version,
       });
-      await bitacora(c, s.usuarioId, "ver", "documento", docId);
+      await bitacora(c, s.usuarioId, "ver", "documento", docId, doc.comite_id);
       return { url };
     }),
   );

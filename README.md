@@ -15,7 +15,7 @@ Este repositorio contiene el diseño del producto, el esquema de base de datos, 
 | --- | --- |
 | [`docs/especificacion-funcional.md`](docs/especificacion-funcional.md) | Especificación funcional: módulos, roles, requisitos, cumplimiento, roadmap, costos, comparación de nubes y oferta para organismos |
 | [`docs/prototipo.html`](docs/prototipo.html) | Prototipo navegable con datos de ejemplo: perfil de organismo en marca blanca, investigación de accidentes con códigos SISESAT reales, invitación de usuarios, centros sincronizados e integraciones del organismo |
-| [`docs/modelo-datos.html`](docs/modelo-datos.html) | Modelo de datos v5.8: diagrama entidad-relación y las 40 tablas |
+| [`docs/modelo-datos.html`](docs/modelo-datos.html) | Modelo de datos v5.9: diagrama entidad-relación y las 40 tablas |
 | [`docs/anexo-privacidad.html`](docs/anexo-privacidad.html) | Anexo de privacidad según la Ley 21.719 |
 | [`docs/arquitectura-aws.html`](docs/arquitectura-aws.html) | Arquitectura de referencia en AWS |
 | [`db/schema.sql`](db/schema.sql) | Esquema PostgreSQL 16: 40 tablas, restricciones, seguridad por fila y funciones de integración con clientes (empresas, centros y accesos por SSO) |
@@ -24,7 +24,7 @@ Este repositorio contiene el diseño del producto, el esquema de base de datos, 
 | [`db/seed_actividades.sql`](db/seed_actividades.sql) | Las 21 secciones del CIIU4.CL 2012 y los 674 códigos de actividad económica del SII, verificados contra la tabla oficial de homologación |
 | [`db/seed_sisesat.sql`](db/seed_sisesat.sql) | Códigos SISESAT de la SUSESO para investigar accidentes y enfermedades (8.641 códigos): forma (Anexo II), agente material (III), causa externa CIE-10 y equivalencias (IV), naturaleza de la lesión (V), ubicación anatómica (VI) y agentes de enfermedad (IX). Se genera con `db/scripts/generar_seed_sisesat.py` |
 | [`db/test_rls.sql`](db/test_rls.sql) | Prueba del aislamiento entre empresas y organismos, y de las reglas de negocio |
-| [`api/`](api/README.md) | API del MVP en TypeScript (Node 22): comités, integrantes, comisiones, programa de trabajo, reuniones, actas, usuarios e integraciones con clientes. Corre en Lambda con la misma imagen que en un contenedor; 37 pruebas contra PostgreSQL real |
+| [`api/`](api/README.md) | API del MVP en TypeScript (Node 22): comités, integrantes, comisiones, programa de trabajo, reuniones, actas, usuarios e integraciones con clientes. Corre en Lambda con la misma imagen que en un contenedor; 38 pruebas contra PostgreSQL real |
 | [`web/`](web/README.md) | Aplicación web del MVP (React + TypeScript): panel, comités, integrantes, comisiones, programa de trabajo, reuniones, actas, centros y usuarios. Inicio de sesión con Cognito o con el sistema del cliente; prueba de punta a punta en el navegador |
 | [`infra/`](infra/README.md) | Terraform del piloto en AWS (`sa-east-1`): red, base de datos, API en Lambda, CloudFront, Cognito, SES, presupuesto y horario de encendido. Incluye el script de carga de la base y pruebas sin cuenta de AWS |
 
@@ -48,7 +48,7 @@ Para verificar el aislamiento y las reglas de negocio sobre una base de prueba (
 psql -d paritario -v ON_ERROR_STOP=1 -f db/test_rls.sql
 ```
 
-Debe terminar con `Todas las verificaciones pasaron.` Son 98 verificaciones; cualquier falla aborta el script con un mensaje `FALLA: …`.
+Debe terminar con `Todas las verificaciones pasaron.` Son 105 verificaciones; cualquier falla aborta el script con un mensaje `FALLA: …`.
 
 ### Cómo funciona el aislamiento
 

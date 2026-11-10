@@ -193,9 +193,33 @@ describe("API de Paritario", { skip: hay ? false : "sin base de pruebas (PGTEST_
       assert.equal(lista.json[0].vigente, false);
     });
 
-    it("ver integrantes queda en la bitácora", async () => {
-      const [n] = await sqlAdmin<{ n: number }>("SELECT count(*)::int AS n FROM log_acceso WHERE entidad = 'comite_integrante' AND accion = 'ver'");
-      assert.ok(n!.n >= 1);
+    it("ver integrantes queda en la bitácora, con la empresa del comité", async () => {
+      const filas = await sqlAdmin<{ empresa: string }>(
+        "SELECT e.razon_social AS empresa FROM log_acceso l JOIN empresa e ON e.id = l.empresa_id WHERE l.entidad = 'comite' AND l.accion = 'ver'",
+      );
+      assert.ok(filas.length >= 1);
+      const [sinEmpresa] = await sqlAdmin<{ n: number }>("SELECT count(*)::int AS n FROM log_acceso WHERE empresa_id IS NULL");
+      assert.equal(sinEmpresa!.n, 0, "toda entrada de la API lleva su empresa");
+    });
+
+    it("cada administrador ve en la bitácora solo los accesos a su empresa", async () => {
+      const [e1] = await sqlAdmin<{ id: number }>("SELECT id FROM empresa WHERE razon_social = 'Empresa 1'");
+      const [admin1] = await sqlAdmin<{ id: number }>("SELECT id FROM usuario WHERE rut = '15151515-0'");
+      const visibles = async (usuarioId: number) =>
+        p.pool.connect().then(async (c) => {
+          try {
+            await c.query("BEGIN");
+            await c.query("SELECT set_config('app.usuario_id', $1, true)", [String(usuarioId)]);
+            const r = await c.query<{ empresa_id: number }>("SELECT DISTINCT empresa_id FROM paritario.log_acceso");
+            await c.query("ROLLBACK");
+            return r.rows.map((x) => x.empresa_id);
+          } finally {
+            c.release();
+          }
+        });
+      assert.deepEqual(await visibles(admin1!.id), [e1!.id]);
+      const [coord] = await sqlAdmin<{ id: number }>("SELECT id FROM usuario WHERE rut = '16161616-8'");
+      assert.deepEqual(await visibles(coord!.id), [], "un coordinador no consulta la bitácora");
     });
   });
 

@@ -103,18 +103,22 @@ export async function varios<T extends pg.QueryResultRow>(c: Cliente, sql: strin
   return r.rows;
 }
 
-/** Bitácora de accesos a datos personales (Ley 21.719). */
+/**
+ * Bitácora de accesos a datos personales (Ley 21.719). Cada entrada lleva la
+ * empresa del comité: así solo su administrador la consulta (seguridad por
+ * fila en log_acceso).
+ */
 export async function bitacora(
   c: Cliente,
   usuarioId: number,
   accion: "ver" | "crear" | "editar" | "eliminar" | "exportar",
   entidad: string,
   entidadId: number,
+  comiteId: number,
 ): Promise<void> {
-  await c.query("INSERT INTO log_acceso (usuario_id, accion, entidad, entidad_id) VALUES ($1, $2, $3, $4)", [
-    usuarioId,
-    accion,
-    entidad,
-    entidadId,
-  ]);
+  await c.query(
+    `INSERT INTO log_acceso (usuario_id, empresa_id, accion, entidad, entidad_id)
+     VALUES ($1, (SELECT empresa_id FROM comite WHERE id = $5), $2, $3, $4)`,
+    [usuarioId, accion, entidad, entidadId, comiteId],
+  );
 }

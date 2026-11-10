@@ -97,7 +97,7 @@
 
 <div class="page">
   <header class="hero">
-    <div class="eyebrow">Especificación técnica · v5.8</div>
+    <div class="eyebrow">Especificación técnica · v5.9</div>
     <h1>Modelo de datos · Sistema de Comités Paritarios</h1>
     <p>Esquema relacional de <b>Paritario</b>, plataforma independiente para gestionar Comités Paritarios de Higiene y Seguridad. Funciona en dos modos: <b>venta directa</b> a empresas y <b>marca blanca</b> para organismos administradores (mutualidades o servicios públicos) que entregan la plataforma a sus empresas adherentes con su propia marca. <b>40 entidades</b> en cinco dominios, alineado al <b>DS 44/2024</b> y preparado para la <b>Ley 21.719</b> de protección de datos, con paridad funcional sobre plataformas de referencia del mercado (comisiones, programa de trabajo por rubro, material de apoyo, autoservicio de accesos). Tipos en notación PostgreSQL; aplican igual a SQL Server con equivalencias menores. Las entidades marcadas <span class="tag-new" style="margin:0">nuevo</span> son las sumadas en esta versión.</p>
     <div class="toolbar">
@@ -148,11 +148,11 @@
       <li><b>Documentos directo a S3 (v5.5).</b> El navegador sube y baja los archivos con URL firmadas, sin pasar por la API. <code>documento</code> nace <code>pendiente</code> y pasa a <code>disponible</code> cuando la API confirma el objeto, con su huella SHA-256, su tamaño y la versión del bucket versionado.</li>
       <li><b>Datos sensibles identificados.</b> <code>documento.contiene_datos_sensibles</code> marca los archivos con datos de salud, que reciben acceso reforzado y una retención propia en <code>politica_retencion</code>. Desde v5.8 la base exige la marca en toda investigación de accidentes o enfermedades: no depende de que la aplicación o quien sube el archivo lo recuerde.</li>
       <li><b>Bitácora que no se altera (v5.8).</b> <code>log_acceso</code> registra quién vio, creó o editó integrantes, asistencia y documentos, y cuándo. La aplicación puede agregar entradas pero no modificarlas. Falta fijar su plazo de conservación en <code>politica_retencion</code>. La regla limita a la aplicación, no al administrador técnico de la base: para producción, la bitácora se copia a un almacenamiento que no admita cambios.</li>
-      <li><b>Pendiente: consulta de la bitácora por la empresa.</b> Hoy <code>log_acceso</code> no tiene ámbito: solo la consulta el proveedor. Para que cada empresa vea quién accedió a sus casos (como muestra el prototipo), cada entrada debe llevar su <code>empresa_id</code> y la tabla, seguridad por fila como el resto; sin eso una empresa podría ver entradas de otra. Se implementa después del MVP, junto con la pantalla.</li>
+      <li><b>Bitácora separada por empresa (v5.9).</b> Cada entrada de <code>log_acceso</code> lleva la empresa de los datos (<code>empresa_id</code>) y la tabla tiene seguridad por fila: solo el administrador de esa empresa la consulta (<code>empresas_administradas()</code>); coordinadores, auditores, organismos y otras empresas no ven nada. Cada sesión registra solo a su propio nombre y dentro de su ámbito, así nadie fabrica entradas de otro. Queda para después del MVP la pantalla de consulta, que el prototipo ya muestra.</li>
     </ul></div>
   </section>
 
-  <footer>Especificación v5.8 · producto independiente con marca blanca para organismos · datos y nombres de ejemplo · notación PostgreSQL 16 · paridad funcional de mercado, identidad propia.</footer>
+  <footer>Especificación v5.9 · producto independiente con marca blanca para organismos · datos y nombres de ejemplo · notación PostgreSQL 16 · paridad funcional de mercado, identidad propia.</footer>
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/mermaid/10.9.1/mermaid.min.js"></script>
@@ -343,8 +343,9 @@ const DOMAINS=[
      ["empresa_id","bigint","FK:empresa",""],["rol_solicitado_id","smallint","FK:rol",""],["comite_id","bigint","FK:comite","ámbito pedido"],
      ["estado","enum","","pendiente · aprobada · rechazada"],["resuelta_por","bigint","FK:usuario",""],
      ["fecha_solicitud","timestamptz","",""],["fecha_resolucion","timestamptz","",""]]},
-   {name:"log_acceso", desc:"Bitácora de acceso a datos personales (Ley 21.719). Solo se inserta: la aplicación no puede modificarla (v5.8). Aún sin ámbito por empresa.", cols:[
-     ["id","bigint","PK",""],["usuario_id","bigint","FK:usuario",""],
+   {name:"log_acceso", desc:"Bitácora de acceso a datos personales (Ley 21.719). Solo se inserta: la aplicación no puede modificarla (v5.8). Separada por empresa con seguridad por fila (v5.9).", cols:[
+     ["id","bigint","PK",""],["usuario_id","bigint","FK:usuario","quien accedió; solo puede registrar a su propio nombre"],
+     ["empresa_id","bigint","FK:empresa","empresa de los datos; solo su administrador consulta la entrada (v5.9)"],
      ["accion","enum","","login · ver · crear · editar · eliminar · exportar"],
      ["entidad","varchar(60)","","tabla afectada: hoy comite_integrante, reunion_asistencia y documento"],["entidad_id","bigint","",""],
      ["ip","inet","",""],["user_agent","varchar(300)","",""],["timestamp","timestamptz","",""]]},

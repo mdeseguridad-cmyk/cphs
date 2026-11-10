@@ -109,7 +109,7 @@ export function rutasReuniones(app: FastifyInstance, ctx: Contexto): void {
           ORDER BY ci.tipo, p.apellidos`,
         [reunionId, r.comite_id],
       );
-      if (filas.length) await bitacora(c, s.usuarioId, "ver", "reunion_asistencia", reunionId);
+      if (filas.length) await bitacora(c, s.usuarioId, "ver", "reunion_asistencia", reunionId, r.comite_id);
       return filas;
     }),
   );
@@ -138,7 +138,7 @@ export function rutasReuniones(app: FastifyInstance, ctx: Contexto): void {
           [reunionId, a.integrante_id, a.presente, a.presente ? null : (a.justificacion ?? null)],
         );
       }
-      await bitacora(c, s.usuarioId, "editar", "reunion_asistencia", reunionId);
+      await bitacora(c, s.usuarioId, "editar", "reunion_asistencia", reunionId, r.comite_id);
       return { id: reunionId, registrados: d.asistencia.length };
     }),
   );

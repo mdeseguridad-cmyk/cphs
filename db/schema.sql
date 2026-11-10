@@ -1,6 +1,6 @@
 -- =============================================================================
 -- Paritario — esquema de base de datos (PostgreSQL 16)
--- Modelo de datos v5.8: 40 tablas en 5 dominios.
+-- Modelo de datos v5.9: 40 tablas en 5 dominios.
 --
 --   01 Organización ........... organismo_administrador, organismo, empresa,
 --                               sucursal, integracion, rol_externo,
@@ -486,6 +486,7 @@ CREATE INDEX solicitud_acceso_pendiente_idx ON solicitud_acceso (empresa_id) WHE
 CREATE TABLE log_acceso (
     id          bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     usuario_id  bigint REFERENCES usuario(id),
+    empresa_id  bigint REFERENCES empresa(id),
     accion      log_accion NOT NULL,
     entidad     varchar(60),
     entidad_id  bigint,
@@ -493,8 +494,10 @@ CREATE TABLE log_acceso (
     user_agent  varchar(300),
     "timestamp" timestamptz NOT NULL DEFAULT now()
 );
-COMMENT ON TABLE log_acceso IS 'Bitácora de acceso a datos personales (Ley 21.719). La aplicación registra ver, crear y editar sobre comite_integrante, reunion_asistencia y documento. Solo se inserta: la aplicación no puede modificarla. Su plazo de conservación se define en politica_retencion.';
+COMMENT ON TABLE log_acceso IS 'Bitácora de acceso a datos personales (Ley 21.719). La aplicación registra ver, crear y editar sobre integrantes, asistencia y documentos. Solo se inserta: la aplicación no puede modificarla. Separada por empresa: solo su administrador la consulta. Su plazo de conservación se define en politica_retencion.';
+COMMENT ON COLUMN log_acceso.empresa_id IS 'Empresa a la que pertenecen los datos consultados o cambiados. Define quién puede consultar la entrada.';
 CREATE INDEX log_acceso_usuario_idx ON log_acceso (usuario_id, "timestamp");
+CREATE INDEX log_acceso_empresa_idx ON log_acceso (empresa_id, "timestamp");
 CREATE INDEX log_acceso_entidad_idx ON log_acceso (entidad, entidad_id);
 
 -- =============================================================================
@@ -914,6 +917,15 @@ LANGUAGE sql STABLE SECURITY DEFINER SET search_path = paritario, pg_temp AS $$
     WHERE ur.usuario_id = usuario_actual() AND ur.vigente
 $$;
 
+-- Empresas que el usuario administra (rol ADMIN_EMPRESA): las únicas cuya
+-- bitácora de accesos puede consultar.
+CREATE FUNCTION empresas_administradas() RETURNS bigint[]
+LANGUAGE sql STABLE SECURITY DEFINER SET search_path = paritario, pg_temp AS $$
+    SELECT coalesce(array_agg(DISTINCT ur.empresa_id), '{}')
+    FROM usuario_rol ur JOIN rol r ON r.id = ur.rol_id
+    WHERE ur.usuario_id = usuario_actual() AND ur.vigente AND r.codigo = 'ADMIN_EMPRESA'
+$$;
+
 CREATE FUNCTION comites_visibles() RETURNS bigint[]
 LANGUAGE sql STABLE SECURITY DEFINER SET search_path = paritario, pg_temp AS $$
     SELECT coalesce(array_agg(DISTINCT c.id), '{}')
@@ -966,6 +978,15 @@ ALTER TABLE integracion ENABLE ROW LEVEL SECURITY;
 CREATE POLICY integracion_ambito ON integracion
     USING (organismo_id = ANY (organismos_visibles())
            OR empresa_id = ANY (empresas_visibles()));
+
+-- Bitácora de accesos: la lee solo el administrador de la empresa; cada
+-- sesión escribe entradas a su propio nombre y dentro de su ámbito.
+ALTER TABLE log_acceso ENABLE ROW LEVEL SECURITY;
+CREATE POLICY log_acceso_lectura ON log_acceso FOR SELECT
+    USING (empresa_id = ANY (empresas_administradas()));
+CREATE POLICY log_acceso_registro ON log_acceso FOR INSERT
+    WITH CHECK (usuario_id = usuario_actual()
+                AND (empresa_id IS NULL OR empresa_id = ANY (empresas_visibles())));
 
 ALTER TABLE rol_externo ENABLE ROW LEVEL SECURITY;
 CREATE POLICY rol_externo_ambito ON rol_externo
