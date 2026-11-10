@@ -648,6 +648,20 @@ function renderInvDetalle(c, tb, inv){
         <div class="fld"><label for="i-estado">Estado</label><select id="i-estado" data-f="estado" data-r="1">${Object.entries(EST_INV).map(([k,v])=>`<option value="${k}" ${k===inv.estado?'selected':''}>${v[0]}</option>`).join("")}</select></div>
         <div class="fld"><label for="i-cierre">Fecha de cierre</label><input id="i-cierre" type="date" data-f="cierre" value="${esc(inv.cierre)}" ${inv.estado==="cerrada"?"":"disabled"}><span class="hint">${inv.estado==="cerrada"&&!inv.cierre?"Una investigación cerrada necesita fecha de cierre.":"Se habilita al cerrar la investigación."}</span></div>
       </div></div></div>
+
+      <div class="card"><div class="card-h"><h3>Documentos de la investigación</h3><button class="btn ghost sm" type="button">Subir documento</button></div><div class="card-b">
+        <div class="ilist">
+          <div class="iitem"><span style="flex:1;min-width:0">Informe de investigación ${esc(inv.folio||"")}.pdf<div style="font-size:11.5px;color:var(--faint)">Cargado ${fdate(inv.fecha)}</div></span><span class="chip crit">Datos de salud</span></div>
+        </div>
+        <p class="segtip" style="margin:10px 0 0">Todo documento de una investigación queda marcado como dato de salud, aunque quien lo suba no lo indique: la base de datos rechaza uno sin esa marca.</p>
+      </div></div>
+
+      <div class="card"><div class="card-h"><h3>Registro de accesos</h3></div><div class="card-b">
+        <div class="ilist">
+          ${[["hoy, 09:12","María Paredes","vio el caso"],["ayer, 16:40","Laura Méndez","editó las medidas"],[fdate(inv.fecha),"Laura Méndez","registró la investigación"]].map(r=>`<div class="iitem"><span style="flex:1;min-width:0"><b>${esc(r[1])}</b> ${esc(r[2])}<div style="font-size:11.5px;color:var(--faint)">${esc(r[0])}</div></span></div>`).join("")}
+        </div>
+        <p class="segtip" style="margin:10px 0 0">Cada consulta y cambio de datos personales queda registrado (Ley 21.719). La aplicación solo puede agregar entradas, no modificarlas: así el registro sirve como evidencia ante la Agencia o un titular.</p>
+      </div></div>
     </div>`;
   const upd=(el)=>{const f=el.dataset.f; let v=el.value; if(f==="dias") v=Math.max(0,+v||0);
     inv[f]=v;
