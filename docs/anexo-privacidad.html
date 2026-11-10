@@ -156,7 +156,7 @@
       <li><b>Una persona, varias empresas.</b> Un trabajador puede integrar comités de más de una empresa (por ejemplo, un contratista). Se registra una sola vez por su RUT; si ya existe, la nueva empresa lo vincula sin ver ni modificar los datos que cargó la otra.</li>
       <li><b>Datos de salud.</b> Toda investigación de accidentes o enfermedades se marca como dato sensible, aunque quien la suba no lo indique, y queda visible solo para la empresa y el comité. La regla está en la base de datos: rechaza una investigación sin esa marca, venga de donde venga.</li>
       <li><b>Calidad.</b> Catálogos (región/comuna) y validaciones evitan datos erróneos o duplicados.</li>
-      <li><b>Responsabilidad proactiva.</b> <code>log_acceso</code> registra quién vio o cambió datos personales y cuándo: cada consulta y cambio de integrantes, cada registro de asistencia, y cada carga y descarga de documentos. La aplicación puede agregar entradas pero no modificarlas, así la bitácora sirve como evidencia ante la Agencia o un titular.</li>
+      <li><b>Responsabilidad proactiva.</b> <code>log_acceso</code> registra quién vio o cambió datos personales y cuándo: cada consulta y cambio de integrantes, cada registro de asistencia, y cada carga y descarga de documentos. La aplicación puede agregar entradas pero no modificarlas, así la bitácora sirve como evidencia ante la Agencia o un titular. El administrador técnico de la base (el proveedor) todavía podría alterarla: para producción conviene copiarla a un almacenamiento que no admita cambios (por ejemplo, S3 con bloqueo de objetos) y restringir y registrar ese acceso administrativo.</li>
       <li><b>Sesiones acotadas.</b> La sesión vive solo en la pestaña del navegador y se cierra al cerrarla; Paritario no guarda contraseñas. Bloquear una cuenta impide el ingreso de inmediato, aunque su sesión siga abierta.</li>
       <li><b>Pruebas sin datos reales.</b> El sistema se prueba con datos ficticios en una base desechable; el modo de desarrollo, sin Cognito, no existe en la versión publicada.</li>
       <li><b>Transparencia.</b> Aviso de privacidad accesible con finalidad, base legal, plazos y cómo ejercer derechos.</li>
@@ -234,7 +234,7 @@
     </div>
   </section>
 
-  <footer>Anexo v7 · producto independiente con marca blanca · Ley 21.719 / Ley 19.628 · orientación de diseño, no asesoría legal · validar con asesoría legal.</footer>
+  <footer>Anexo v8 · producto independiente con marca blanca · Ley 21.719 / Ley 19.628 · orientación de diseño, no asesoría legal · validar con asesoría legal.</footer>
 </div>
 
 <script>
@@ -259,6 +259,8 @@ const CHECKS=[
   ["Acordar con cada cliente cómo avisa una desvinculación urgente","El acceso por su sistema se recalcula en el siguiente ingreso"],
   ["Fijar el plazo de conservación de la bitácora de accesos","log_acceso crece con cada consulta de datos personales"],
   ["Recorrer el piloto con datos ficticios antes de cargar personas reales","Comprobar con cada rol qué ve y qué no"],
+  ["Proteger la bitácora también frente al administrador técnico","Copia en almacenamiento que no admita cambios y acceso administrativo registrado"],
+  ["Ofrecer a la empresa la consulta de su bitácora de accesos","Está en el prototipo; falta en la API y la aplicación del MVP"],
 ];
 const esc=s=>String(s).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
 let state={};
