@@ -133,8 +133,8 @@ Entrega la visión consolidada y las notificaciones que mantienen activo el cump
 | Usabilidad | Interfaz clara en español, flujos guiados; curva de aprendizaje baja |
 | Accesibilidad | Lineamientos WCAG 2.1 AA |
 | Soporte móvil | PWA responsiva, acceso por QR; base para app nativa futura |
-| Auditoría | Bitácora de quién vio o cambió datos personales y cuándo: integrantes, asistencia, y carga y descarga de documentos |
-| Datos de salud | Toda investigación de accidentes o enfermedades se marca como dato sensible, aunque quien la suba no lo indique, y solo la ven la empresa y el comité |
+| Auditoría | Bitácora de quién vio o cambió datos personales y cuándo: integrantes, asistencia, y carga y descarga de documentos. La aplicación agrega entradas pero no puede modificarlas |
+| Datos de salud | Toda investigación de accidentes o enfermedades se marca como dato sensible, aunque quien la suba no lo indique, y solo la ven la empresa y el comité. La base de datos rechaza una investigación sin esa marca |
 | Integridad de documentos | Actas y documentos se suben directo del navegador al almacenamiento, sin pasar por la API; cada archivo queda registrado con su huella SHA-256, su tamaño y su versión, y solo se muestra cuando la carga se confirma |
 
 ## 13. Cumplimiento normativo
@@ -144,7 +144,7 @@ El sistema se diseña para cumplir el marco de seguridad y salud en el trabajo y
 - **DS 44/2024** — Reglamento sobre gestión preventiva de los riesgos laborales: programa de trabajo, clasificación de actividades obligatorias y prelación de medidas.
 - **Ley 16.744** — marco de los comités paritarios: constitución, conformación y reuniones.
 - **Ley 21.719** — protección de datos personales (vigente desde el 1 de diciembre de 2026, con proyecto de postergación a 2027 en trámite): cada empresa cliente como responsable (en marca blanca, también el organismo) y el proveedor como encargado, base de licitud por obligación legal, derechos ARCOP, retención, notificación de brechas, encargados y transferencia internacional. El detalle está en el [Anexo de Privacidad](anexo-privacidad.html).
-- **Medidas ya aplicadas en el MVP** — confidencialidad por rol decidida por la base de datos (un comité de otra empresa no aparece), bitácora de accesos a datos personales, investigaciones marcadas como datos de salud, personas compartidas entre empresas sin exponer sus datos, sesiones acotadas a la pestaña y pruebas solo con datos ficticios. Antes de cargar personas reales falta fijar el plazo de conservación de la bitácora y recorrer el piloto con cada rol.
+- **Medidas ya aplicadas en el MVP** — confidencialidad por rol decidida por la base de datos (un comité de otra empresa no aparece), bitácora de accesos a datos personales que no se puede alterar, investigaciones marcadas como datos de salud por regla de la base de datos, personas compartidas entre empresas sin exponer sus datos, sesiones acotadas a la pestaña y pruebas solo con datos ficticios. Antes de cargar personas reales falta fijar el plazo de conservación de la bitácora y recorrer el piloto con cada rol.
 
 Esta sección es orientación de diseño y debe validarse con asesoría legal.
 
