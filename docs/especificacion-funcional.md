@@ -54,6 +54,7 @@ Gestiona el ciclo de vida completo de cada comité y de las personas que lo inte
 
 - Constituir un comité asociado a un centro de trabajo, con su periodo de vigencia (2 años) y fecha de constitución.
 - Registrar integrantes titulares y suplentes, con conformación paritaria (igual número de representantes de empresa y de trabajadores).
+- Registrar a cada persona una sola vez por su RUT: si ya integra comités de otra empresa (por ejemplo, un contratista), se vincula sin ver ni modificar los datos que cargó esa empresa.
 - Designar presidente y secretario, con atribuciones para modificar el comité.
 - Marcar al integrante aforado, cuya designación debe constar en el acta de constitución.
 - Dar de baja o disolver un comité (estado + fecha), conservando su historial; nunca se elimina físicamente.
@@ -109,7 +110,7 @@ Permite que las empresas gestionen sus propios accesos, con aprobación del admi
 - **Invitar usuarios:** el administrador ingresa nombre, RUT (validado con dígito verificador), correo, rol y ámbito. La persona recibe un correo con una clave temporal y define la suya en su primer ingreso.
 - Enviar una **solicitud de acceso** indicando rol y ámbito (empresa o comité).
 - El administrador **aprueba o rechaza** las solicitudes; al aprobar, se genera el acceso con su ámbito.
-- Gestionar usuarios y roles vigentes. Cada cuenta está **invitada** (aún no ingresa), **activa** o **bloqueada**; se puede reenviar la invitación, bloquear y desbloquear. Bloquear cierra las sesiones abiertas. Las cuentas nunca se borran, para conservar quién hizo cada cosa.
+- Gestionar usuarios y roles vigentes. Cada cuenta está **invitada** (aún no ingresa), **activa** o **bloqueada**; se puede reenviar la invitación, bloquear y desbloquear. Bloquear cierra las sesiones abiertas e impide el ingreso de inmediato. La sesión vive solo en la pestaña del navegador y se cierra al cerrarla. Las cuentas nunca se borran, para conservar quién hizo cada cosa.
 - Toda operación sobre datos personales queda en la bitácora de acceso.
 
 ## 11. Panel, reportes y notificaciones
@@ -132,7 +133,8 @@ Entrega la visión consolidada y las notificaciones que mantienen activo el cump
 | Usabilidad | Interfaz clara en español, flujos guiados; curva de aprendizaje baja |
 | Accesibilidad | Lineamientos WCAG 2.1 AA |
 | Soporte móvil | PWA responsiva, acceso por QR; base para app nativa futura |
-| Auditoría | Bitácora de accesos y cambios sobre datos personales |
+| Auditoría | Bitácora de quién vio o cambió datos personales y cuándo: integrantes, asistencia, y carga y descarga de documentos |
+| Datos de salud | Toda investigación de accidentes o enfermedades se marca como dato sensible, aunque quien la suba no lo indique, y solo la ven la empresa y el comité |
 | Integridad de documentos | Actas y documentos se suben directo del navegador al almacenamiento, sin pasar por la API; cada archivo queda registrado con su huella SHA-256, su tamaño y su versión, y solo se muestra cuando la carga se confirma |
 
 ## 13. Cumplimiento normativo
@@ -142,6 +144,7 @@ El sistema se diseña para cumplir el marco de seguridad y salud en el trabajo y
 - **DS 44/2024** — Reglamento sobre gestión preventiva de los riesgos laborales: programa de trabajo, clasificación de actividades obligatorias y prelación de medidas.
 - **Ley 16.744** — marco de los comités paritarios: constitución, conformación y reuniones.
 - **Ley 21.719** — protección de datos personales (vigente desde el 1 de diciembre de 2026, con proyecto de postergación a 2027 en trámite): cada empresa cliente como responsable (en marca blanca, también el organismo) y el proveedor como encargado, base de licitud por obligación legal, derechos ARCOP, retención, notificación de brechas, encargados y transferencia internacional. El detalle está en el [Anexo de Privacidad](anexo-privacidad.html).
+- **Medidas ya aplicadas en el MVP** — confidencialidad por rol decidida por la base de datos (un comité de otra empresa no aparece), bitácora de accesos a datos personales, investigaciones marcadas como datos de salud, personas compartidas entre empresas sin exponer sus datos, sesiones acotadas a la pestaña y pruebas solo con datos ficticios. Antes de cargar personas reales falta fijar el plazo de conservación de la bitácora y recorrer el piloto con cada rol.
 
 Esta sección es orientación de diseño y debe validarse con asesoría legal.
 
