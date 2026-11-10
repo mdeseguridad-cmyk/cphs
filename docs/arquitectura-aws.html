@@ -256,7 +256,8 @@
         <li>La API entra a la base con <b>tokens de IAM</b>: no hay clave de aplicación guardada.</li>
         <li>Cifrado en reposo y en tránsito de punta a punta (TLS verificado hasta la base).</li>
         <li>La función de trabajos no llega a la base; la API no puede enviar correos ni crear usuarios.</li>
-        <li>Datos de salud solo para la empresa y el comité (seguridad por fila).</li></ul></div>
+        <li>Datos de salud solo para la empresa y el comité (seguridad por fila); la base rechaza una investigación sin esa marca.</li>
+        <li>Bitácora de accesos a datos personales que la aplicación no puede modificar.</li></ul></div>
       <div class="card"><h3>Escalabilidad</h3><ul>
         <li>Lambda escala sola; la concurrencia se limita para proteger la base.</li>
         <li>API sin estado: con tráfico sostenido, la misma imagen pasa a ECS Fargate con balanceador.</li>
@@ -310,7 +311,7 @@
     <p style="font-size:13px;color:var(--muted);margin:0 0 10px">Todo el MVP está en el repositorio y probado sin una cuenta de AWS. La infraestructura aún no se aplica.</p>
     <div class="tbl"><table class="ev">
       <tr><th>Carpeta</th><th>Qué contiene</th><th>Cómo se prueba</th></tr>
-      <tr><td><code>db/</code></td><td>Esquema PostgreSQL 16 con seguridad por fila, catálogos oficiales y funciones de integración</td><td>96 verificaciones de aislamiento y reglas de negocio</td></tr>
+      <tr><td><code>db/</code></td><td>Esquema PostgreSQL 16 con seguridad por fila, catálogos oficiales y funciones de integración</td><td>98 verificaciones de aislamiento y reglas de negocio</td></tr>
       <tr><td><code>api/</code></td><td>API del MVP (Fastify); la misma imagen corre como función <code>api</code> y <code>trabajos</code></td><td>37 pruebas contra PostgreSQL real; S3, Cognito y SES en memoria</td></tr>
       <tr><td><code>web/</code></td><td>Aplicación web (React + Vite)</td><td>Prueba de punta a punta en Chromium con la API real, por rol, en escritorio y teléfono</td></tr>
       <tr><td><code>infra/</code></td><td>Terraform del piloto, carga de la base y horario de encendido</td><td>10 pruebas con proveedor simulado y checkov sin fallas</td></tr>
