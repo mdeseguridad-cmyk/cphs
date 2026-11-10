@@ -111,7 +111,7 @@ Permite que las empresas gestionen sus propios accesos, con aprobación del admi
 - Enviar una **solicitud de acceso** indicando rol y ámbito (empresa o comité).
 - El administrador **aprueba o rechaza** las solicitudes; al aprobar, se genera el acceso con su ámbito.
 - Gestionar usuarios y roles vigentes. Cada cuenta está **invitada** (aún no ingresa), **activa** o **bloqueada**; se puede reenviar la invitación, bloquear y desbloquear. Bloquear cierra las sesiones abiertas e impide el ingreso de inmediato. La sesión vive solo en la pestaña del navegador y se cierra al cerrarla. Las cuentas nunca se borran, para conservar quién hizo cada cosa.
-- Toda operación sobre datos personales queda en la bitácora de acceso. La empresa podrá consultar quién vio o cambió cada caso (está en el prototipo; se implementa después del MVP).
+- Toda operación sobre datos personales queda en la bitácora de acceso. La empresa podrá consultar quién vio o cambió cada caso (está en el prototipo; se implementa después del MVP). Antes, la bitácora debe quedar separada por empresa como el resto de los datos, para que ninguna vea entradas de otra.
 
 ## 11. Panel, reportes y notificaciones
 
