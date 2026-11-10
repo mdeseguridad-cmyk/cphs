@@ -154,9 +154,9 @@
       <li><b>Minimización en registros.</b> Los registros técnicos se borran a los 30 días y no deben contener datos personales; los correos no incluyen datos sensibles en su cuerpo.</li>
       <li><b>Confidencialidad.</b> Cada rol ve solo lo de su ámbito, y lo decide la base de datos: un comité de otra empresa no aparece ni se puede abrir. El administrador de empresa ve a todo su personal y gestiona accesos; el coordinador, su comité; el auditor solo lee; el organismo ve indicadores sin personas ni documentos. El administrador ve el nombre de quienes tienen acceso a su empresa, pero no sus datos en comités de otras empresas.</li>
       <li><b>Una persona, varias empresas.</b> Un trabajador puede integrar comités de más de una empresa (por ejemplo, un contratista). Se registra una sola vez por su RUT; si ya existe, la nueva empresa lo vincula sin ver ni modificar los datos que cargó la otra.</li>
-      <li><b>Datos de salud.</b> Toda investigación de accidentes o enfermedades se marca como dato sensible, aunque quien la suba no lo indique, y queda visible solo para la empresa y el comité.</li>
+      <li><b>Datos de salud.</b> Toda investigación de accidentes o enfermedades se marca como dato sensible, aunque quien la suba no lo indique, y queda visible solo para la empresa y el comité. La regla está en la base de datos: rechaza una investigación sin esa marca, venga de donde venga.</li>
       <li><b>Calidad.</b> Catálogos (región/comuna) y validaciones evitan datos erróneos o duplicados.</li>
-      <li><b>Responsabilidad proactiva.</b> <code>log_acceso</code> registra quién vio o cambió datos personales y cuándo: cada consulta y cambio de integrantes, cada registro de asistencia, y cada carga y descarga de documentos.</li>
+      <li><b>Responsabilidad proactiva.</b> <code>log_acceso</code> registra quién vio o cambió datos personales y cuándo: cada consulta y cambio de integrantes, cada registro de asistencia, y cada carga y descarga de documentos. La aplicación puede agregar entradas pero no modificarlas, así la bitácora sirve como evidencia ante la Agencia o un titular.</li>
       <li><b>Sesiones acotadas.</b> La sesión vive solo en la pestaña del navegador y se cierra al cerrarla; Paritario no guarda contraseñas. Bloquear una cuenta impide el ingreso de inmediato, aunque su sesión siga abierta.</li>
       <li><b>Pruebas sin datos reales.</b> El sistema se prueba con datos ficticios en una base desechable; el modo de desarrollo, sin Cognito, no existe en la versión publicada.</li>
       <li><b>Transparencia.</b> Aviso de privacidad accesible con finalidad, base legal, plazos y cómo ejercer derechos.</li>
@@ -234,7 +234,7 @@
     </div>
   </section>
 
-  <footer>Anexo v6 · producto independiente con marca blanca · Ley 21.719 / Ley 19.628 · orientación de diseño, no asesoría legal · validar con asesoría legal.</footer>
+  <footer>Anexo v7 · producto independiente con marca blanca · Ley 21.719 / Ley 19.628 · orientación de diseño, no asesoría legal · validar con asesoría legal.</footer>
 </div>
 
 <script>
