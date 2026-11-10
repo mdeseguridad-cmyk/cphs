@@ -147,7 +147,8 @@
       <li><b>Sin contraseñas en la base (v5.5).</b> La identidad la gestiona Cognito: <code>usuario</code> guarda el RUT (nombre de usuario) y el identificador de la cuenta (<code>cognito_sub</code>), nunca una clave. Un usuario invitado pasa a activo en su primer ingreso; uno bloqueado nunca se borra. La aplicación tampoco usa clave para conectarse a la base: entra con tokens de IAM.</li>
       <li><b>Documentos directo a S3 (v5.5).</b> El navegador sube y baja los archivos con URL firmadas, sin pasar por la API. <code>documento</code> nace <code>pendiente</code> y pasa a <code>disponible</code> cuando la API confirma el objeto, con su huella SHA-256, su tamaño y la versión del bucket versionado.</li>
       <li><b>Datos sensibles identificados.</b> <code>documento.contiene_datos_sensibles</code> marca los archivos con datos de salud, que reciben acceso reforzado y una retención propia en <code>politica_retencion</code>. Desde v5.8 la base exige la marca en toda investigación de accidentes o enfermedades: no depende de que la aplicación o quien sube el archivo lo recuerde.</li>
-      <li><b>Bitácora que no se altera (v5.8).</b> <code>log_acceso</code> registra quién vio, creó o editó integrantes, asistencia y documentos, y cuándo. La aplicación puede agregar entradas pero no modificarlas. Falta fijar su plazo de conservación en <code>politica_retencion</code>.</li>
+      <li><b>Bitácora que no se altera (v5.8).</b> <code>log_acceso</code> registra quién vio, creó o editó integrantes, asistencia y documentos, y cuándo. La aplicación puede agregar entradas pero no modificarlas. Falta fijar su plazo de conservación en <code>politica_retencion</code>. La regla limita a la aplicación, no al administrador técnico de la base: para producción, la bitácora se copia a un almacenamiento que no admita cambios.</li>
+      <li><b>Pendiente: consulta de la bitácora por la empresa.</b> Hoy <code>log_acceso</code> no tiene ámbito: solo la consulta el proveedor. Para que cada empresa vea quién accedió a sus casos (como muestra el prototipo), cada entrada debe llevar su <code>empresa_id</code> y la tabla, seguridad por fila como el resto; sin eso una empresa podría ver entradas de otra. Se implementa después del MVP, junto con la pantalla.</li>
     </ul></div>
   </section>
 
@@ -342,7 +343,7 @@ const DOMAINS=[
      ["empresa_id","bigint","FK:empresa",""],["rol_solicitado_id","smallint","FK:rol",""],["comite_id","bigint","FK:comite","ámbito pedido"],
      ["estado","enum","","pendiente · aprobada · rechazada"],["resuelta_por","bigint","FK:usuario",""],
      ["fecha_solicitud","timestamptz","",""],["fecha_resolucion","timestamptz","",""]]},
-   {name:"log_acceso", desc:"Bitácora de acceso a datos personales (Ley 21.719). Solo se inserta: la aplicación no puede modificarla (v5.8).", cols:[
+   {name:"log_acceso", desc:"Bitácora de acceso a datos personales (Ley 21.719). Solo se inserta: la aplicación no puede modificarla (v5.8). Aún sin ámbito por empresa.", cols:[
      ["id","bigint","PK",""],["usuario_id","bigint","FK:usuario",""],
      ["accion","enum","","login · ver · crear · editar · eliminar · exportar"],
      ["entidad","varchar(60)","","tabla afectada: hoy comite_integrante, reunion_asistencia y documento"],["entidad_id","bigint","",""],
