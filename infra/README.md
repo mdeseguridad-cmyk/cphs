@@ -77,6 +77,18 @@ Crea el esquema y los catálogos (comunas, actividades, códigos SISESAT) y el r
 
 Se puede ejecutar más de una vez: si el esquema ya existe no lo recrea y solo actualiza el rol y sus permisos. Para cambios de esquema posteriores hará falta una herramienta de migraciones en la aplicación.
 
+## Dar de alta la primera empresa
+
+La aplicación no puede crear empresas (la seguridad por fila se lo impide). La primera empresa cliente y su administrador se crean con:
+
+```bash
+infra/scripts/alta_empresa.sh --rut-empresa 76.123.456-0 --razon-social "Constructora Ejemplo S.A." --actividad 410010 --organismo-administrador ACHS --rut-admin 12.345.678-5 --nombres "María" --apellidos "Paredes" --correo maria@empresa.cl
+```
+
+Crea la empresa, la persona, su usuario y el acceso de administrador en la base (como tarea de un solo uso, igual que la carga) y le envía la invitación de Cognito: un correo con una clave temporal para entrar con su RUT. Desde ahí, ese administrador invita al resto desde la aplicación. Se puede repetir sin duplicar nada; `--actividad` (código SII) y `--organismo-administrador` son opcionales.
+
+Sin dominio de correo propio, Cognito envía las invitaciones desde su remitente genérico, con un límite de 50 correos al día: suficiente para el piloto.
+
 ## Publicar la API
 
 La API está en [`api/`](../api/README.md). La misma imagen sirve para las dos funciones; la variable `MODO` las distingue:
