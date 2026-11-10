@@ -257,7 +257,7 @@
         <li>Cifrado en reposo y en tránsito de punta a punta (TLS verificado hasta la base).</li>
         <li>La función de trabajos no llega a la base; la API no puede enviar correos ni crear usuarios.</li>
         <li>Datos de salud solo para la empresa y el comité (seguridad por fila); la base rechaza una investigación sin esa marca.</li>
-        <li>Bitácora de accesos a datos personales que la aplicación no puede modificar.</li></ul></div>
+        <li>Bitácora de accesos a datos personales que la aplicación no puede modificar (el administrador técnico sí: ver sección 5).</li></ul></div>
       <div class="card"><h3>Escalabilidad</h3><ul>
         <li>Lambda escala sola; la concurrencia se limita para proteger la base.</li>
         <li>API sin estado: con tráfico sostenido, la misma imagen pasa a ECS Fargate con balanceador.</li>
@@ -302,6 +302,8 @@
       <tr><td>AWS WAF</td><td>Primer cliente en producción</td><td>Reglas gestionadas contra ataques comunes y límite de solicitudes</td></tr>
       <tr><td>ElastiCache Redis</td><td>Cuando la caché o la sesión lo justifiquen</td><td>Descargar consultas repetidas de la base</td></tr>
       <tr><td>NAT Gateway o endpoints privados</td><td>Si la API necesita llamar servicios externos directamente</td><td>Salida controlada a internet desde la red privada</td></tr>
+      <tr><td>Copia de la bitácora en S3 con bloqueo de objetos</td><td>Antes de cargar personas reales en producción</td><td>Evidencia de accesos que tampoco el administrador técnico de la base puede alterar</td></tr>
+      <tr><td>Bitácora separada por empresa</td><td>Antes de que cada empresa consulte la suya</td><td>Que ninguna empresa vea entradas de otra (la tabla aún no tiene seguridad por fila)</td></tr>
       <tr><td>Llaves KMS propias, registros de acceso y de flujo, Performance Insights</td><td>Producción</td><td>Auditoría, control de llaves y diagnóstico</td></tr>
     </table></div>
   </section>
