@@ -12,6 +12,7 @@
 #   DIR      directorio con carga/cargar.sh (y lo que ese script necesite)
 #   PREFIJO  carpeta en el bucket de operaciones, p. ej. carga-base
 #   VAR=…    variables de entorno adicionales para la tarea
+# Con MOSTRAR_SALIDA=1 muestra al final lo que escribió la tarea.
 
 INFRA=${INFRA:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}
 salida() { terraform -chdir="$INFRA" output -raw "$1"; }
@@ -83,5 +84,11 @@ ejecutar_en_base() {
     MSYS_NO_PATHCONV=1 aws logs tail "/ecs/$cluster/carga-base" --since 1h \
       --log-stream-name-prefix "carga/carga/${arn##*/}" --format short 2>&1 | tail -n 40 >&2 || true
     return 1
+  fi
+  # MOSTRAR_SALIDA=1: muestra lo que escribió la tarea (consultas de solo lectura).
+  if [ "${MOSTRAR_SALIDA:-}" = "1" ]; then
+    echo "Salida de la tarea:"
+    MSYS_NO_PATHCONV=1 aws logs tail "/ecs/$cluster/carga-base" --since 1h \
+      --log-stream-name-prefix "carga/carga/${arn##*/}" --format short 2>&1 | cut -c21- || true
   fi
 }

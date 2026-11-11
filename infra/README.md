@@ -89,6 +89,21 @@ Crea la empresa, la persona, su usuario y el acceso de administrador en la base 
 
 Sin dominio de correo propio, Cognito envía las invitaciones desde su remitente genérico, con un límite de 50 correos al día: suficiente para el piloto.
 
+## Revisar el acceso de una persona
+
+Para saber por qué alguien no puede entrar, o con qué rol entra:
+
+```bash
+infra/scripts/acceso_usuario.sh 12.345.678-5
+```
+
+Muestra su cuenta en Cognito (si existe, si está habilitada y si ya definió su contraseña) y, en Paritario, su estado, último ingreso y sus roles por empresa o comité. Nunca muestra contraseñas, que nadie puede leer, ni correos. Si la persona olvidó su contraseña, se le asigna una temporal que ella cambia al entrar (la escribe usted en su computador, nunca en un chat ni correo):
+
+```bash
+aws cognito-idp admin-set-user-password --user-pool-id $(terraform -chdir=infra output -raw cognito_user_pool_id) \
+  --username 12345678-5 --no-permanent --password 'Clave-Temporal-2026'
+```
+
 ## Publicar la API
 
 La API está en [`api/`](../api/README.md). La misma imagen sirve para las dos funciones; la variable `MODO` las distingue:
