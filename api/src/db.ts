@@ -41,7 +41,9 @@ export function crearPool(cfg: Config): pg.Pool {
     ssl,
     max: db.maxConexiones,
     idleTimeoutMillis: 60_000,
-    connectionTimeoutMillis: 10_000,
+    // Bajo el tiempo máximo de la función (29 s): la validación del token de
+    // IAM en RDS puede tardar más de 10 s al abrir una conexión nueva.
+    connectionTimeoutMillis: db.tiempoConexionMs,
     // Reconectar antes de que venza el token de IAM.
     maxLifetimeSeconds: 600,
   });

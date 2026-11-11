@@ -23,8 +23,17 @@ interface ErrorPg {
   constraint?: string;
 }
 
+/** La base no respondió a tiempo al abrir la conexión (apagada, o lenta en validar el acceso). */
+function sinConexion(e: unknown): boolean {
+  const m = (e as Error)?.message ?? "";
+  return /connection timeout|timeout exceeded when trying to connect|ECONNREFUSED|ETIMEDOUT/.test(m);
+}
+
 /** Convierte un error de PostgreSQL en un ErrorApi. Los mensajes no incluyen datos de las filas. */
 export function desdePostgres(e: unknown): ErrorApi | null {
+  if (sinConexion(e)) {
+    return new ErrorApi(503, "base_no_disponible", "La base de datos no respondió a tiempo. Intente de nuevo en unos segundos.");
+  }
   const err = e as ErrorPg;
   if (!err || typeof err.code !== "string") return null;
   const reglas: Record<string, string> = {

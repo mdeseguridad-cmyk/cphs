@@ -52,6 +52,7 @@ export function construirApp(o: Opciones): FastifyInstance {
   app.setErrorHandler((e, req, rep) => {
     const api = e instanceof ErrorApi ? e : desdePostgres(e);
     if (api) {
+      if (api.status >= 500) req.log.error(e);
       return rep.status(api.status).send({ error: api.codigo, mensaje: api.message, detalle: api.detalle });
     }
     const fe = e as { statusCode?: number; validation?: unknown };

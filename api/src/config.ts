@@ -16,6 +16,8 @@ export interface Config {
     /** Certificados de RDS para verify-full. */
     caPath: string;
     maxConexiones: number;
+    /** Espera máxima para abrir una conexión. Con IAM, RDS valida el token y puede tardar varios segundos. */
+    tiempoConexionMs: number;
   };
   documentosBucket: string;
   operacionesBucket: string;
@@ -59,6 +61,7 @@ export function leerConfig(env: NodeJS.ProcessEnv = process.env): Config {
       sslmode,
       caPath: env.DB_CA_PATH ?? "/opt/paritario/rds-ca.pem",
       maxConexiones: Number(env.DB_MAX_CONEXIONES ?? 2),
+      tiempoConexionMs: Number(env.DB_TIEMPO_CONEXION_MS ?? 25_000),
     },
     documentosBucket: env.DOCUMENTOS_BUCKET ?? "",
     operacionesBucket: env.OPERACIONES_BUCKET ?? "",

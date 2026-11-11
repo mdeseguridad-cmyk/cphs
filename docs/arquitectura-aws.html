@@ -313,7 +313,7 @@
     <div class="tbl"><table class="ev">
       <tr><th>Carpeta</th><th>Qué contiene</th><th>Cómo se prueba</th></tr>
       <tr><td><code>db/</code></td><td>Esquema PostgreSQL 16 con seguridad por fila, catálogos oficiales y funciones de integración</td><td>105 verificaciones de aislamiento y reglas de negocio</td></tr>
-      <tr><td><code>api/</code></td><td>API del MVP (Fastify); la misma imagen corre como función <code>api</code> y <code>trabajos</code></td><td>38 pruebas contra PostgreSQL real; S3, Cognito y SES en memoria</td></tr>
+      <tr><td><code>api/</code></td><td>API del MVP (Fastify); la misma imagen corre como función <code>api</code> y <code>trabajos</code></td><td>40 pruebas (38 contra PostgreSQL real); S3, Cognito y SES en memoria</td></tr>
       <tr><td><code>web/</code></td><td>Aplicación web (React + Vite)</td><td>Prueba de punta a punta en Chromium con la API real, por rol, en escritorio y teléfono</td></tr>
       <tr><td><code>infra/</code></td><td>Terraform del piloto, carga de la base y horario de encendido</td><td>10 pruebas con proveedor simulado y checkov sin fallas</td></tr>
     </table></div>
