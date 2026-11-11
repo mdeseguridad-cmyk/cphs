@@ -38,7 +38,10 @@ $PSQL -v app="$APP" <<'SQL'
 SELECT format('CREATE ROLE %I LOGIN', :'app')
 WHERE NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = :'app')
 \gexec
-SELECT format('ALTER ROLE %I WITH LOGIN NOSUPERUSER NOBYPASSRLS PASSWORD NULL', :'app')
+-- Sin NOSUPERUSER/NOBYPASSRLS: en RDS el administrador no es superusuario y
+-- PostgreSQL no le deja declarar esos atributos. Un rol nuevo no los tiene, y
+-- se verifica al final.
+SELECT format('ALTER ROLE %I WITH LOGIN PASSWORD NULL', :'app')
 \gexec
 -- rds_iam solo existe en RDS: habilita el ingreso con token de IAM.
 SELECT format('GRANT rds_iam TO %I', :'app')
@@ -58,6 +61,15 @@ SELECT format('REVOKE UPDATE ON paritario.log_acceso FROM %I', :'app') \gexec
 SELECT format('GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA paritario TO %I', :'app') \gexec
 SELECT format('ALTER DEFAULT PRIVILEGES IN SCHEMA paritario GRANT SELECT, INSERT, UPDATE ON TABLES TO %I', :'app') \gexec
 SELECT format('ALTER DEFAULT PRIVILEGES IN SCHEMA paritario GRANT USAGE, SELECT ON SEQUENCES TO %I', :'app') \gexec
+SQL
+
+# La seguridad por fila depende de que el rol no pueda saltársela.
+$PSQL -v app="$APP" <<'SQL'
+SELECT CASE WHEN rolsuper OR rolbypassrls THEN 'sí' END AS problema
+FROM pg_roles WHERE rolname = :'app' \gset
+\if :{?problema}
+DO $$ BEGIN RAISE EXCEPTION 'El rol de la aplicación puede saltarse la seguridad por fila (SUPERUSER o BYPASSRLS)'; END $$;
+\endif
 SQL
 
 echo "Resumen:"
