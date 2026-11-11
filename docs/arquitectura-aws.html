@@ -257,7 +257,8 @@
         <li>Cifrado en reposo y en tránsito de punta a punta (TLS verificado hasta la base).</li>
         <li>La función de trabajos no llega a la base; la API no puede enviar correos ni crear usuarios.</li>
         <li>Datos de salud solo para la empresa y el comité (seguridad por fila); la base rechaza una investigación sin esa marca.</li>
-        <li>Bitácora de accesos a datos personales separada por empresa: solo su administrador la consulta (pantalla con filtros y descarga en CSV, que también queda registrada; cada entrada guarda la IP del visitante según CloudFront y su navegador), y la aplicación no puede modificarla (el administrador técnico sí: ver sección 5).</li></ul></div>
+        <li>Bitácora de accesos a datos personales separada por empresa: solo su administrador la consulta (pantalla con filtros y descarga en CSV, que también queda registrada; cada entrada guarda la IP del visitante según CloudFront y su navegador), y la aplicación no puede modificarla (el administrador técnico sí: ver sección 5).</li>
+        <li>Registros técnicos en CloudWatch sin datos personales y con vencimiento a los 30 días, también el de la base: la API no guarda la IP del visitante y PostgreSQL registra las consultas lentas sin sus valores.</li></ul></div>
       <div class="card"><h3>Escalabilidad</h3><ul>
         <li>Lambda escala sola; la concurrencia se limita para proteger la base.</li>
         <li>API sin estado: con tráfico sostenido, la misma imagen pasa a ECS Fargate con balanceador.</li>
