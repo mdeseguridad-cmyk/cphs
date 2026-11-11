@@ -144,7 +144,7 @@ El sistema se diseña para cumplir el marco de seguridad y salud en el trabajo y
 - **DS 44/2024** — Reglamento sobre gestión preventiva de los riesgos laborales: programa de trabajo, clasificación de actividades obligatorias y prelación de medidas.
 - **Ley 16.744** — marco de los comités paritarios: constitución, conformación y reuniones.
 - **Ley 21.719** — protección de datos personales (vigente desde el 1 de diciembre de 2026, con proyecto de postergación a 2027 en trámite): cada empresa cliente como responsable (en marca blanca, también el organismo) y el proveedor como encargado, base de licitud por obligación legal, derechos ARCOP, retención, notificación de brechas, encargados y transferencia internacional. El detalle está en el [Anexo de Privacidad](anexo-privacidad.html).
-- **Medidas ya aplicadas en el MVP** — confidencialidad por rol decidida por la base de datos (un comité de otra empresa no aparece), bitácora de accesos a datos personales, con IP y navegador, que no se puede alterar, está separada por empresa y su administrador consulta y descarga, investigaciones marcadas como datos de salud por regla de la base de datos, personas compartidas entre empresas sin exponer sus datos, sesiones acotadas a la pestaña y pruebas solo con datos ficticios. Antes de cargar personas reales falta fijar el plazo de conservación de la bitácora y recorrer el piloto con cada rol. Para producción, la bitácora debe protegerse también frente al administrador técnico de la base, copiándola a un almacenamiento que no admita cambios.
+- **Medidas ya aplicadas en el MVP** — confidencialidad por rol decidida por la base de datos (un comité de otra empresa no aparece), bitácora de accesos a datos personales, con IP y navegador, que no se puede alterar, está separada por empresa y su administrador consulta y descarga, investigaciones marcadas como datos de salud por regla de la base de datos, personas compartidas entre empresas sin exponer sus datos, sesiones acotadas a la pestaña, registros técnicos sin datos personales (sin la IP del visitante ni los valores de las consultas) que se borran a los 30 días, y pruebas solo con datos ficticios. Antes de cargar personas reales falta fijar el plazo de conservación de la bitácora y recorrer el piloto con cada rol. Para producción, la bitácora debe protegerse también frente al administrador técnico de la base, copiándola a un almacenamiento que no admita cambios.
 
 Esta sección es orientación de diseño y debe validarse con asesoría legal.
 
@@ -242,7 +242,7 @@ Un piloto de 10 empresas cuesta ≈ 28 – 38 USD/mes en AWS (São Paulo, single
 | S3 + CloudFront | SPA y actas (pocos GB) | 0 – 3 |
 | Cognito | ~80 usuarios | 0 |
 | Amazon SES | ~1.000–2.000 correos | < 1 |
-| Secrets Manager / CloudWatch | clave maestra de la base, registros 30 días | 1 – 3 |
+| Secrets Manager / CloudWatch | clave maestra de la base, registros 30 días (también el de la base de datos) | 1 – 3 |
 | Transferencia de datos | red | 0 – 2 |
 | **Total piloto (24/7)** | | **≈ 28 – 38** |
 
