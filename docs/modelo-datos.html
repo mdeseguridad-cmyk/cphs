@@ -148,7 +148,7 @@
       <li><b>Documentos directo a S3 (v5.5).</b> El navegador sube y baja los archivos con URL firmadas, sin pasar por la API. <code>documento</code> nace <code>pendiente</code> y pasa a <code>disponible</code> cuando la API confirma el objeto, con su huella SHA-256, su tamaño y la versión del bucket versionado.</li>
       <li><b>Datos sensibles identificados.</b> <code>documento.contiene_datos_sensibles</code> marca los archivos con datos de salud, que reciben acceso reforzado y una retención propia en <code>politica_retencion</code>. Desde v5.8 la base exige la marca en toda investigación de accidentes o enfermedades: no depende de que la aplicación o quien sube el archivo lo recuerde.</li>
       <li><b>Bitácora que no se altera (v5.8).</b> <code>log_acceso</code> registra quién vio, creó o editó integrantes, asistencia y documentos, y cuándo. La aplicación puede agregar entradas pero no modificarlas. Falta fijar su plazo de conservación en <code>politica_retencion</code>. La regla limita a la aplicación, no al administrador técnico de la base: para producción, la bitácora se copia a un almacenamiento que no admita cambios.</li>
-      <li><b>Bitácora separada por empresa (v5.9).</b> Cada entrada de <code>log_acceso</code> lleva la empresa de los datos (<code>empresa_id</code>) y la tabla tiene seguridad por fila: solo el administrador de esa empresa la consulta (<code>empresas_administradas()</code>); coordinadores, auditores, organismos y otras empresas no ven nada. Cada sesión registra solo a su propio nombre y dentro de su ámbito, así nadie fabrica entradas de otro. Queda para después del MVP la pantalla de consulta, que el prototipo ya muestra.</li>
+      <li><b>Bitácora separada por empresa (v5.9).</b> Cada entrada de <code>log_acceso</code> lleva la empresa de los datos (<code>empresa_id</code>) y la tabla tiene seguridad por fila: solo el administrador de esa empresa la consulta (<code>empresas_administradas()</code>); coordinadores, auditores, organismos y otras empresas no ven nada. Cada sesión registra solo a su propio nombre y dentro de su ámbito, así nadie fabrica entradas de otro. El administrador la consulta en la pantalla <i>Bitácora de accesos</i>, con filtros por fechas, persona, comité y acción, y la descarga en CSV; cada descarga queda en la misma bitácora como <code>exportar</code> sobre <code>log_acceso</code>. El comité de cada entrada se obtiene de la entidad afectada, sin columnas adicionales.</li>
     </ul></div>
   </section>
 
@@ -346,9 +346,9 @@ const DOMAINS=[
    {name:"log_acceso", desc:"Bitácora de acceso a datos personales (Ley 21.719). Solo se inserta: la aplicación no puede modificarla (v5.8). Separada por empresa con seguridad por fila (v5.9).", cols:[
      ["id","bigint","PK",""],["usuario_id","bigint","FK:usuario","quien accedió; solo puede registrar a su propio nombre"],
      ["empresa_id","bigint","FK:empresa","empresa de los datos; solo su administrador consulta la entrada (v5.9)"],
-     ["accion","enum","","login · ver · crear · editar · eliminar · exportar"],
-     ["entidad","varchar(60)","","tabla afectada: hoy comite_integrante, reunion_asistencia y documento"],["entidad_id","bigint","",""],
-     ["ip","inet","",""],["user_agent","varchar(300)","",""],["timestamp","timestamptz","",""]]},
+     ["accion","enum","","login · ver · crear · editar · eliminar · exportar (descarga de la bitácora)"],
+     ["entidad","varchar(60)","","qué se vio o cambió: comite (sus integrantes), comite_integrante, reunion_asistencia, documento y log_acceso (descarga)"],["entidad_id","bigint","",""],
+     ["ip","inet","","aún no se completa en el MVP"],["user_agent","varchar(300)","","aún no se completa en el MVP"],["timestamp","timestamptz","",""]]},
   ]},
  {n:"05", t:"Cumplimiento y privacidad", s:"Soporte a la Ley 21.719: derechos de titulares, retención, brechas y encargados.",
   ents:[
