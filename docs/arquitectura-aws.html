@@ -261,7 +261,8 @@
       <div class="card"><h3>Escalabilidad</h3><ul>
         <li>Lambda escala sola; la concurrencia se limita para proteger la base.</li>
         <li>API sin estado: con tráfico sostenido, la misma imagen pasa a ECS Fargate con balanceador.</li>
-        <li>CloudFront descarga el tráfico estático.</li></ul></div>
+        <li>CloudFront descarga el tráfico estático.</li>
+        <li>Cada conexión nueva a la base demora: RDS valida el token de IAM y en el piloto tarda 9 a 18 s. La API espera hasta 25 s, reutiliza la conexión entre solicitudes y la renueva cada 10 minutos; solo la primera solicitud tras un rato sin uso lo nota.</li></ul></div>
       <div class="card"><h3>Costos y operación</h3><ul>
         <li>Piloto ≈ 28 – 38 USD/mes; la base es casi todo el costo.</li>
         <li>Sin balanceador, NAT Gateway ni IP públicas permanentes.</li>
@@ -302,6 +303,7 @@
       <tr><td>AWS WAF</td><td>Primer cliente en producción</td><td>Reglas gestionadas contra ataques comunes y límite de solicitudes</td></tr>
       <tr><td>ElastiCache Redis</td><td>Cuando la caché o la sesión lo justifiquen</td><td>Descargar consultas repetidas de la base</td></tr>
       <tr><td>NAT Gateway o endpoints privados</td><td>Si la API necesita llamar servicios externos directamente</td><td>Salida controlada a internet desde la red privada</td></tr>
+      <tr><td>RDS Proxy</td><td>Si la espera de la primera solicitud molesta a los usuarios, o con muchas funciones en paralelo</td><td>Mantiene conexiones abiertas con la base y valida el token de IAM una vez; la API conecta en milisegundos (costo adicional por hora)</td></tr>
       <tr><td>Copia de la bitácora en S3 con bloqueo de objetos</td><td>Antes de cargar personas reales en producción</td><td>Evidencia de accesos que tampoco el administrador técnico de la base puede alterar</td></tr>
 <tr><td>Llaves KMS propias, registros de acceso y de flujo, Performance Insights</td><td>Producción</td><td>Auditoría, control de llaves y diagnóstico</td></tr>
     </table></div>
@@ -309,7 +311,7 @@
 
   <section>
     <div class="sec-h"><span class="n">6</span><h2>Código, pruebas y despliegue</h2></div>
-    <p style="font-size:13px;color:var(--muted);margin:0 0 10px">Todo el MVP está en el repositorio y probado sin una cuenta de AWS. La infraestructura aún no se aplica.</p>
+    <p style="font-size:13px;color:var(--muted);margin:0 0 10px">Todo el MVP está en el repositorio y probado sin una cuenta de AWS. El piloto está desplegado en São Paulo (sa-east-1) y el ingreso real con Cognito funciona.</p>
     <div class="tbl"><table class="ev">
       <tr><th>Carpeta</th><th>Qué contiene</th><th>Cómo se prueba</th></tr>
       <tr><td><code>db/</code></td><td>Esquema PostgreSQL 16 con seguridad por fila, catálogos oficiales y funciones de integración</td><td>105 verificaciones de aislamiento y reglas de negocio</td></tr>
@@ -322,6 +324,8 @@
       <li><code>infra/scripts/cargar_base.sh</code>: esquema, catálogos y rol de la aplicación.</li>
       <li><code>api/scripts/publicar.sh</code>: imagen ARM64 a ECR; luego <code>api_imagen</code> en Terraform y otro <code>apply</code>.</li>
       <li><code>web/scripts/publicar.sh</code>: front y su <code>config.json</code> al bucket, con invalidación de CloudFront.</li>
+      <li><code>infra/scripts/alta_empresa.sh</code>: da de alta una empresa y su primer administrador, que recibe la invitación de Cognito.</li>
+      <li><code>infra/scripts/diagnostico.sh</code>: si la API no llega a la base, muestra su estado, la red de la función, las reglas de los grupos de seguridad y los últimos errores, sin secretos.</li>
     </ul></div>
   </section>
 
