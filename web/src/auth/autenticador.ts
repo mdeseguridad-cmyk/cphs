@@ -39,8 +39,14 @@ export function autenticador(): Autenticador {
 export function mensajeError(e: unknown): string {
   const code = (e as { code?: string; name?: string })?.code ?? (e as { name?: string })?.name;
   switch (code) {
-    case "NotAuthorizedException":
+    case "NotAuthorizedException": {
+      // Cognito usa el mismo código para varias causas; el mensaje las distingue.
+      const m = (e as Error)?.message ?? "";
+      if (/attempts exceeded/i.test(m)) return "Demasiados intentos fallidos. Espere unos 15 minutos antes de volver a intentar.";
+      if (/disabled/i.test(m)) return "Su cuenta está deshabilitada. Pida al administrador de su empresa que la revise.";
+      if (/temporary password has expired/i.test(m)) return "Su clave temporal venció. Pida al administrador que le reenvíe la invitación.";
       return "RUT o contraseña incorrectos.";
+    }
     case "UserNotFoundException":
       return "RUT o contraseña incorrectos.";
     case "PasswordResetRequiredException":
