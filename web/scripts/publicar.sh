@@ -45,6 +45,7 @@ aws s3 sync "$WEB/dist/assets" "s3://$BUCKET/assets" --delete --exclude "*.map" 
 for f in index.html config.json; do
   aws s3 cp "$WEB/dist/$f" "s3://$BUCKET/$f" --cache-control "no-cache, max-age=0"
 done
-aws cloudfront create-invalidation --distribution-id "$DISTRIBUCION" --paths "/index.html" "/config.json" "/" >/dev/null
+# MSYS_NO_PATHCONV: en Git Bash (Windows), evita que "/index.html" se convierta en una ruta de Windows.
+MSYS_NO_PATHCONV=1 aws cloudfront create-invalidation --distribution-id "$DISTRIBUCION" --paths "/index.html" "/config.json" "/" >/dev/null
 
 echo "Publicado en $(salida url)"
