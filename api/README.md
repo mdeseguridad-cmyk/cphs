@@ -22,7 +22,7 @@ La misma imagen corre en Lambda (con [Lambda Web Adapter](https://github.com/aws
 | Administrador o asesor de organismo | Nada (ve indicadores de sus empresas, sin personas) |
 
 - **Sin claves guardadas.** Los usuarios entran con Cognito; la API valida el token con las llaves públicas del user pool, incluidas en la imagen. La base se usa con tokens de IAM.
-- **Bitácora.** Ver o cambiar integrantes, asistencia y documentos queda en `log_acceso` (Ley 21.719). El administrador de la empresa la consulta en `GET /api/empresas/:id/bitacora` (filtros `desde`, `hasta`, `usuario_id`, `comite_id`, `accion`; páginas con `antes`) y la descarga en `GET /api/empresas/:id/bitacora.csv`; la descarga queda registrada como `exportar`.
+- **Bitácora.** Ver o cambiar integrantes, asistencia y documentos queda en `log_acceso` (Ley 21.719). El administrador de la empresa la consulta en `GET /api/empresas/:id/bitacora` (filtros `desde`, `hasta`, `usuario_id`, `comite_id`, `accion`; páginas con `antes`) y la descarga en `GET /api/empresas/:id/bitacora.csv`; la descarga queda registrada como `exportar`. Cada entrada guarda la IP y el navegador: la IP sale de `CloudFront-Viewer-Address` (no de `X-Forwarded-For`, cuyo primer valor lo puede escribir el visitante).
 - **Nada se borra.** Comités, integrantes, accesos y cuentas se dan de baja o se bloquean. La única excepción son los miembros de una comisión, que se reemplazan al editarla.
 
 ## Autenticación

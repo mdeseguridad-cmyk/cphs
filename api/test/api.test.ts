@@ -255,13 +255,32 @@ describe("API de Paritario", { skip: hay ? false : "sin base de pruebas (PGTEST_
       assert.equal((await llamar("GET", `/api/empresas/${e1}/bitacora.csv`, "admin3")).status, 403);
     });
 
+    it("cada entrada guarda la IP y el navegador de quien accedió", async () => {
+      const c1 = await comiteId("C1");
+      const r = await p.app.inject({
+        method: "GET",
+        url: `/api/comites/${c1}/integrantes`,
+        headers: { "x-token-usuario": tokens.admin1!, "cloudfront-viewer-address": "203.0.113.7:51234", "user-agent": "Navegador de prueba/1.0" },
+      });
+      assert.equal(r.statusCode, 200);
+      const [fila] = await sqlAdmin<{ ip: string; user_agent: string }>(
+        "SELECT host(ip) AS ip, user_agent FROM log_acceso WHERE entidad = 'comite' AND entidad_id = $1 ORDER BY id DESC LIMIT 1",
+        [c1],
+      );
+      assert.deepEqual(fila, { ip: "203.0.113.7", user_agent: "Navegador de prueba/1.0" });
+      const e1 = await empresaId("Empresa 1");
+      const b = await llamar("GET", `/api/empresas/${e1}/bitacora?limite=1`, "admin1");
+      assert.equal(b.json.entradas[0].ip, "203.0.113.7");
+      assert.equal(b.json.entradas[0].navegador, "Navegador de prueba/1.0");
+    });
+
     it("descargar la bitácora entrega un CSV y queda registrado", async () => {
       const e1 = await empresaId("Empresa 1");
       const r = await p.app.inject({ method: "GET", url: `/api/empresas/${e1}/bitacora.csv`, headers: { "x-token-usuario": tokens.admin1! } });
       assert.equal(r.statusCode, 200);
       assert.match(r.headers["content-type"] as string, /^text\/csv/);
       const lineas = r.body.replace(/^\uFEFF/, "").trim().split("\r\n");
-      assert.match(lineas[0]!, /^Fecha \(hora de Chile\);RUT;Persona;Acción/);
+      assert.match(lineas[0]!, /^Fecha \(hora de Chile\);RUT;Persona;Acción;Sobre;Detalle;Comité;IP;Navegador$/);
       assert.ok(lineas.length >= 3);
       const [n] = await sqlAdmin<{ n: number }>(
         "SELECT count(*)::int AS n FROM log_acceso WHERE accion = 'exportar' AND entidad = 'log_acceso' AND empresa_id = $1",

@@ -257,7 +257,7 @@
         <li>Cifrado en reposo y en tránsito de punta a punta (TLS verificado hasta la base).</li>
         <li>La función de trabajos no llega a la base; la API no puede enviar correos ni crear usuarios.</li>
         <li>Datos de salud solo para la empresa y el comité (seguridad por fila); la base rechaza una investigación sin esa marca.</li>
-        <li>Bitácora de accesos a datos personales separada por empresa: solo su administrador la consulta (pantalla con filtros y descarga en CSV, que también queda registrada), y la aplicación no puede modificarla (el administrador técnico sí: ver sección 5).</li></ul></div>
+        <li>Bitácora de accesos a datos personales separada por empresa: solo su administrador la consulta (pantalla con filtros y descarga en CSV, que también queda registrada; cada entrada guarda la IP del visitante según CloudFront y su navegador), y la aplicación no puede modificarla (el administrador técnico sí: ver sección 5).</li></ul></div>
       <div class="card"><h3>Escalabilidad</h3><ul>
         <li>Lambda escala sola; la concurrencia se limita para proteger la base.</li>
         <li>API sin estado: con tráfico sostenido, la misma imagen pasa a ECS Fargate con balanceador.</li>
@@ -313,7 +313,7 @@
     <div class="tbl"><table class="ev">
       <tr><th>Carpeta</th><th>Qué contiene</th><th>Cómo se prueba</th></tr>
       <tr><td><code>db/</code></td><td>Esquema PostgreSQL 16 con seguridad por fila, catálogos oficiales y funciones de integración</td><td>105 verificaciones de aislamiento y reglas de negocio</td></tr>
-      <tr><td><code>api/</code></td><td>API del MVP (Fastify); la misma imagen corre como función <code>api</code> y <code>trabajos</code></td><td>43 pruebas (41 contra PostgreSQL real); S3, Cognito y SES en memoria</td></tr>
+      <tr><td><code>api/</code></td><td>API del MVP (Fastify); la misma imagen corre como función <code>api</code> y <code>trabajos</code></td><td>47 pruebas (42 contra PostgreSQL real); S3, Cognito y SES en memoria</td></tr>
       <tr><td><code>web/</code></td><td>Aplicación web (React + Vite)</td><td>Prueba de punta a punta en Chromium con la API real, por rol, en escritorio y teléfono</td></tr>
       <tr><td><code>infra/</code></td><td>Terraform del piloto, carga de la base y horario de encendido</td><td>10 pruebas con proveedor simulado y checkov sin fallas</td></tr>
     </table></div>

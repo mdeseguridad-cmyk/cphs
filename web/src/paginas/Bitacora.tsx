@@ -18,6 +18,8 @@ interface Entrada {
   comite_id: number | null;
   comite: string | null;
   detalle: string | null;
+  ip: string | null;
+  navegador: string | null;
 }
 
 interface Pagina {
@@ -53,6 +55,16 @@ function haceDias(n: number): string {
   const d = new Date();
   d.setDate(d.getDate() - n);
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+/** "Chrome · Windows" a partir del User-Agent; el texto completo queda en el título. */
+export function navegadorCorto(ua: string | null): string {
+  if (!ua) return "";
+  const nav = /Edg\//.test(ua) ? "Edge" : /OPR\//.test(ua) ? "Opera" : /Firefox\//.test(ua) ? "Firefox"
+    : /Chrome\/|CriOS\//.test(ua) ? "Chrome" : /Safari\//.test(ua) ? "Safari" : "";
+  const so = /Android/.test(ua) ? "Android" : /iPhone|iPad/.test(ua) ? "iOS" : /Windows/.test(ua) ? "Windows"
+    : /Mac OS X|Macintosh/.test(ua) ? "macOS" : /Linux/.test(ua) ? "Linux" : "";
+  return [nav, so].filter(Boolean).join(" · ") || "Otro";
 }
 
 const nombreDe = (a: { nombres: string | null; apellidos: string | null; rut: string | null }) =>
@@ -123,7 +135,7 @@ export function Bitacora() {
       </Encabezado>
       <div className="aviso">
         Registro de quién vio o cambió datos personales de su empresa: integrantes de comités, asistencia a reuniones y documentos (Ley 21.719).
-        Solo lo consulta el administrador de la empresa y nadie puede modificarlo desde la aplicación. Las descargas también quedan registradas.
+        Cada entrada guarda la IP y el navegador desde donde se hizo. Solo lo consulta el administrador de la empresa y nadie puede modificarlo desde la aplicación. Las descargas también quedan registradas.
       </div>
 
       <div className="filtros" role="search" aria-label="Filtros de la bitácora">
@@ -175,7 +187,7 @@ export function Bitacora() {
             <div className="tabla">
               <table>
                 <thead>
-                  <tr><th>Fecha y hora</th><th>Persona</th><th>Acción</th><th>Sobre</th><th>Comité</th></tr>
+                  <tr><th>Fecha y hora</th><th>Persona</th><th>Acción</th><th>Sobre</th><th>Comité</th><th>Origen</th></tr>
                 </thead>
                 <tbody>
                   {pagina.entradas.map((e) => (
@@ -194,6 +206,10 @@ export function Bitacora() {
                         {e.detalle && e.entidad !== "log_acceso" ? <div className="sub">{e.detalle}</div> : null}
                       </td>
                       <td>{e.comite_id ? <Link to={`/comites/${e.comite_id}`}>{e.comite}</Link> : "—"}</td>
+                      <td>
+                        {e.ip ? <span className="mono">{e.ip}</span> : "—"}
+                        {e.navegador ? <div className="sub" title={e.navegador}>{navegadorCorto(e.navegador)}</div> : null}
+                      </td>
                     </tr>
                   ))}
                 </tbody>

@@ -10,7 +10,7 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import type { Contexto } from "../app.js";
 import { datos, fecha, id } from "../validacion.js";
-import { varios, type Cliente } from "../db.js";
+import { ORIGEN_SQL, varios, type Cliente } from "../db.js";
 import { exigir, esAdminEmpresa } from "../permisos.js";
 import { invalido } from "../errores.js";
 
@@ -44,6 +44,8 @@ export interface EntradaBitacora {
   comite_id: number | null;
   comite: string | null;
   detalle: string | null;
+  ip: string | null;
+  navegador: string | null;
 }
 
 async function consultar(c: Cliente, empresaId: number, f: Filtros, limite: number): Promise<EntradaBitacora[]> {
@@ -67,6 +69,7 @@ async function consultar(c: Cliente, empresaId: number, f: Filtros, limite: numb
     `SELECT l.id, to_char(l."timestamp" AT TIME ZONE 'America/Santiago', 'YYYY-MM-DD"T"HH24:MI:SS') AS fecha,
             l.accion::text AS accion, l.entidad, l.entidad_id, l.usuario_id,
             u.rut, p.nombres, p.apellidos, cm.id AS comite_id, cm.nombre AS comite,
+            host(l.ip) AS ip, l.user_agent AS navegador,
             CASE l.entidad
               WHEN 'comite_integrante'  THEN concat_ws(' ', pi.nombres, pi.apellidos)
               WHEN 'documento'          THEN d.nombre
@@ -147,14 +150,15 @@ export function rutasBitacora(app: FastifyInstance, ctx: Contexto): void {
       const f = datos(filtros, req.query);
       const filas = await consultar(c, empresaId, { ...f, antes: undefined }, MAX_DESCARGA);
       await c.query(
-        `INSERT INTO log_acceso (usuario_id, empresa_id, accion, entidad) VALUES ($1, $2, 'exportar', 'log_acceso')`,
+        `INSERT INTO log_acceso (usuario_id, empresa_id, accion, entidad, ip, user_agent)
+         VALUES ($1, $2, 'exportar', 'log_acceso', ${ORIGEN_SQL})`,
         [s.usuarioId, empresaId],
       );
       const lineas = [
-        ["Fecha (hora de Chile)", "RUT", "Persona", "Acción", "Sobre", "Detalle", "Comité"].join(";"),
+        ["Fecha (hora de Chile)", "RUT", "Persona", "Acción", "Sobre", "Detalle", "Comité", "IP", "Navegador"].join(";"),
         ...filas.map((e) =>
           [e.fecha.replace("T", " "), e.rut, [e.nombres, e.apellidos].filter(Boolean).join(" "), e.accion,
-            NOMBRE_ENTIDAD[e.entidad ?? ""] ?? e.entidad, e.detalle, e.comite]
+            NOMBRE_ENTIDAD[e.entidad ?? ""] ?? e.entidad, e.detalle, e.comite, e.ip, e.navegador]
             .map(celda)
             .join(";"),
         ),

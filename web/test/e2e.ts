@@ -285,6 +285,8 @@ await paso("la bitácora muestra quién vio o cambió datos personales, y se des
   if (!/^bitacora-accesos-\d{4}-\d{2}-\d{2}\.csv$/.test(descarga.suggestedFilename())) throw new Error(`nombre: ${descarga.suggestedFilename()}`);
   await p.getByLabel("Acción").selectOption("exportar");
   await p.locator("tbody tr").first().getByText("Descargó").waitFor();
+  // El navegador de la prueba (Chromium en Linux) queda como origen de la descarga.
+  await p.locator("tbody tr").first().getByText(/Chrome · Linux/).waitFor();
 });
 
 await paso("centros de trabajo de la empresa", async () => {

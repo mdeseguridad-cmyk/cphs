@@ -5,10 +5,11 @@
 //              servicios de clientes. Sin acceso a la base.
 
 import Fastify, { type FastifyInstance, type FastifyReply, type FastifyRequest } from "fastify";
+import { isIP } from "node:net";
 import type pg from "pg";
 import type { Config } from "./config.js";
 import { cargarSesion, resolverUsuario, tokenDeSolicitud, type Sesion, type VerificarToken } from "./auth.js";
-import { enTransaccion, type Cliente } from "./db.js";
+import { enTransaccion, type Cliente, type Origen } from "./db.js";
 import { ErrorApi, desdePostgres, noAutenticado } from "./errores.js";
 import type { Servicios } from "./servicios.js";
 import { rutasOrganizacion } from "./rutas/organizacion.js";
@@ -43,6 +44,29 @@ export interface Opciones {
   registro?: boolean;
 }
 
+/**
+ * IP y navegador de quien hace la solicitud, para la bitácora. En AWS la IP
+ * sale de CloudFront-Viewer-Address, que pone CloudFront y el visitante no
+ * puede falsificar: la función solo acepta llamadas firmadas por CloudFront.
+ * X-Forwarded-For no sirve, porque su primer valor lo puede escribir el
+ * visitante. Sin CloudFront (desarrollo y pruebas), la IP de la conexión.
+ */
+export function origenDe(req: FastifyRequest): Origen {
+  // En Lambda la conexión viene del adaptador local (127.0.0.1): no sirve.
+  let ip: string | null = process.env.AWS_LAMBDA_FUNCTION_NAME ? null : (req.socket.remoteAddress ?? null);
+  const visor = req.headers["cloudfront-viewer-address"];
+  if (typeof visor === "string" && visor) {
+    // "198.51.100.10:46532" o "2001:db8::1:46532": la IP, sin el puerto final.
+    ip = visor.slice(0, visor.lastIndexOf(":")).replace(/^\[|\]$/g, "");
+  }
+  if (ip?.startsWith("::ffff:")) ip = ip.slice(7);
+  const ua = req.headers["user-agent"];
+  return {
+    ip: ip && isIP(ip) ? ip : null,
+    navegador: typeof ua === "string" && ua ? ua.slice(0, 300) : null,
+  };
+}
+
 export function construirApp(o: Opciones): FastifyInstance {
   const app = Fastify({
     logger: o.registro === false ? false : { level: "info", redact: ["req.headers.authorization", 'req.headers["x-token-usuario"]'] },
@@ -73,7 +97,7 @@ export function construirApp(o: Opciones): FastifyInstance {
     async tx(req, fn) {
       if (req.usuarioId === undefined) throw noAutenticado();
       const id = req.usuarioId;
-      return enTransaccion(o.pool, id, async (c) => fn(c, await cargarSesion(c, id)));
+      return enTransaccion(o.pool, id, async (c) => fn(c, await cargarSesion(c, id)), origenDe(req));
     },
   };
 

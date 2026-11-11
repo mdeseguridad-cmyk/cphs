@@ -855,6 +855,9 @@ const BITA=[
   ["2026-10-07T17:45","María Paredes","12.345.678-5","exportar","Bitácora de accesos","",null],
   ["2026-10-07T17:40","Ricardo Muñoz","13.131.313-6","editar","Integrante","Pedro Lagos Vera · cargo",1],
 ];
+// IP (según CloudFront) y navegador de cada persona en los datos de ejemplo.
+const ORIG_B={"María Paredes":["190.160.12.44","Chrome · Windows"],"Jorge Valdés":["186.10.77.21","Safari · iOS"],
+  "Ricardo Muñoz":["200.83.4.150","Edge · Windows"],"Luis Contreras":["152.172.9.8","Firefox · Linux"]};
 const ACC_B={ver:["Vio","mut"],crear:["Creó","ok"],editar:["Editó","info"],exportar:["Descargó","warn"]};
 function vBitacora(){
   const admin=document.querySelector("#roleswitch .on")?.dataset.role==="Administrador de empresa";
@@ -870,7 +873,7 @@ function vBitacora(){
   wrap.innerHTML=`<div class="ph"><div><h1>Bitácora de accesos</h1><p>Quién vio o cambió datos personales de tu empresa · datos de ejemplo</p></div>
       <button class="btn ghost" id="bDesc"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg>Descargar CSV</button></div>
     <div class="notice info"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2l7 3v6c0 4-3 7-7 9-4-2-7-5-7-9V5l7-3z"/><path d="M9 11l2 2 4-4"/></svg>
-      <span>Cada consulta y cambio de integrantes, asistencia, documentos e investigaciones queda registrado (Ley 21.719). Solo lo ve el administrador de la empresa y la aplicación no puede modificarlo. Las descargas también quedan registradas.</span></div>
+      <span>Cada consulta y cambio de integrantes, asistencia, documentos e investigaciones queda registrado (Ley 21.719), con la IP y el navegador desde donde se hizo. Solo lo ve el administrador de la empresa y la aplicación no puede modificarlo. Las descargas también quedan registradas.</span></div>
     <div class="filters">
       <input id="bDesde" type="date" aria-label="Desde" title="Desde" style="flex:0 1 160px">
       <input id="bHasta" type="date" aria-label="Hasta" title="Hasta" style="flex:0 1 160px">
@@ -879,7 +882,7 @@ function vBitacora(){
       <select id="bAcc" aria-label="Acción"><option value="">Todas las acciones</option>${Object.entries(ACC_B).map(([k,v])=>`<option value="${k}">${v[0]}</option>`).join("")}</select>
     </div>
     <div class="card"><div class="tablewrap"><table>
-      <thead><tr><th>Fecha y hora</th><th>Persona</th><th>Acción</th><th>Sobre</th><th>Comité</th></tr></thead>
+      <thead><tr><th>Fecha y hora</th><th>Persona</th><th>Acción</th><th>Sobre</th><th>Comité</th><th>Origen</th></tr></thead>
       <tbody id="brows"></tbody></table></div></div>
     <p class="segtip" style="margin-top:12px">Sirve para responder a un titular que pregunta quién accedió a sus datos: filtra por fechas o comité y descarga el resultado. El registro está separado por empresa: ninguna empresa, ni el organismo, ve el de otra.</p>`;
   const draw=()=>{const d=$("#bDesde").value,h=$("#bHasta").value,p=$("#bPer").value,c=$("#bCom").value,a=$("#bAcc").value;
@@ -890,8 +893,9 @@ function vBitacora(){
         <td class="cname">${esc(b[1])}<div class="csub mono">${esc(b[2])}</div></td>
         <td><span class="chip ${ac[1]}">${ac[0]}</span></td>
         <td>${esc(b[4])}${b[5]?`<div class="csub">${esc(b[5])}</div>`:""}</td>
-        <td>${cm?`<button class="linkbtn" data-comite="${cm.id}">${esc(cm.name)}</button>`:'<span style="color:var(--faint)">—</span>'}</td></tr>`;}).join("")
-      :`<tr><td colspan="5"><div class="empty">No hay accesos registrados con estos filtros.</div></td></tr>`;};
+        <td>${cm?`<button class="linkbtn" data-comite="${cm.id}">${esc(cm.name)}</button>`:'<span style="color:var(--faint)">—</span>'}</td>
+        <td style="white-space:nowrap">${ORIG_B[b[1]]?`<span class="mono">${ORIG_B[b[1]][0]}</span><div class="csub">${ORIG_B[b[1]][1]}</div>`:'<span style="color:var(--faint)">—</span>'}</td></tr>`;}).join("")
+      :`<tr><td colspan="6"><div class="empty">No hay accesos registrados con estos filtros.</div></td></tr>`;};
   draw();
   ["#bDesde","#bHasta","#bPer","#bCom","#bAcc"].forEach(x=>$(x).onchange=draw);
   $("#bDesc").onclick=()=>{BITA.unshift(["2026-10-14T"+new Date().toTimeString().slice(0,5),"María Paredes","12.345.678-5","exportar","Bitácora de accesos","",null]);draw();};

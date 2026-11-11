@@ -17,7 +17,7 @@ Front del MVP: React 18 + TypeScript, compilado con Vite como aplicación de una
 | Comité → Documentos | Subir actas y documentos directo a S3 (con huella SHA-256) y descargarlos |
 | Centros de trabajo | Lista, agregar y editar (los sincronizados desde el organismo solo cambian su alias) |
 | Usuarios y accesos | Invitar, reenviar invitación, bloquear, desbloquear y quitar accesos (administrador) |
-| Bitácora de accesos | Quién vio o cambió datos personales de la empresa, con filtros por fechas, persona, comité y acción, y descarga en CSV (administrador) |
+| Bitácora de accesos | Quién vio o cambió datos personales de la empresa, con IP y navegador, filtros por fechas, persona, comité y acción, y descarga en CSV (administrador) |
 
 Cada rol ve solo lo que puede hacer: el coordinador no administra usuarios ni otros comités, el auditor solo lee, y el organismo ve sus empresas sin integrantes ni documentos. La API vuelve a validar todo; el front solo esconde lo que no corresponde.
 

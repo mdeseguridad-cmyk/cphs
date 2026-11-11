@@ -49,14 +49,31 @@ export function crearPool(cfg: Config): pg.Pool {
   });
 }
 
-/** Ejecuta fn en una transacción, con el usuario fijado para la seguridad por fila. */
-export async function enTransaccion<T>(pool: pg.Pool, usuarioId: number | null, fn: (c: Cliente) => Promise<T>): Promise<T> {
+/** Desde dónde llega la solicitud: se guarda en cada entrada de la bitácora. */
+export interface Origen {
+  ip: string | null;
+  navegador: string | null;
+}
+
+/**
+ * Ejecuta fn en una transacción, con el usuario fijado para la seguridad por
+ * fila y, si se entrega, el origen de la solicitud para la bitácora.
+ */
+export async function enTransaccion<T>(
+  pool: pg.Pool,
+  usuarioId: number | null,
+  fn: (c: Cliente) => Promise<T>,
+  origen?: Origen,
+): Promise<T> {
   const c = await pool.connect();
   try {
     await c.query("BEGIN");
     await c.query("SET LOCAL search_path = paritario, public");
     if (usuarioId !== null) {
       await c.query("SELECT set_config('app.usuario_id', $1, true)", [String(usuarioId)]);
+    }
+    if (origen) {
+      await c.query("SELECT set_config('app.ip', $1, true), set_config('app.navegador', $2, true)", [origen.ip ?? "", origen.navegador ?? ""]);
     }
     const r = await fn(c);
     await c.query("COMMIT");
@@ -110,6 +127,9 @@ export async function varios<T extends pg.QueryResultRow>(c: Cliente, sql: strin
  * empresa del comité: así solo su administrador la consulta (seguridad por
  * fila en log_acceso).
  */
+/** IP y navegador de la solicitud en curso (los fija enTransaccion). */
+export const ORIGEN_SQL = "nullif(current_setting('app.ip', true), '')::inet, nullif(current_setting('app.navegador', true), '')";
+
 export async function bitacora(
   c: Cliente,
   usuarioId: number,
@@ -119,8 +139,8 @@ export async function bitacora(
   comiteId: number,
 ): Promise<void> {
   await c.query(
-    `INSERT INTO log_acceso (usuario_id, empresa_id, accion, entidad, entidad_id)
-     VALUES ($1, (SELECT empresa_id FROM comite WHERE id = $5), $2, $3, $4)`,
+    `INSERT INTO log_acceso (usuario_id, empresa_id, accion, entidad, entidad_id, ip, user_agent)
+     VALUES ($1, (SELECT empresa_id FROM comite WHERE id = $5), $2, $3, $4, ${ORIGEN_SQL})`,
     [usuarioId, accion, entidad, entidadId, comiteId],
   );
 }
