@@ -72,11 +72,16 @@ ejecutar_en_base() {
 
   codigo=$(aws ecs describe-tasks --cluster "$cluster" --tasks "$arn" \
     --query 'tasks[0].containers[0].exitCode' --output text)
-  echo "Registros: aws logs tail /ecs/$cluster/carga-base --since 1h"
+  # MSYS_NO_PATHCONV: en Git Bash (Windows), evita que "/ecs/…" se convierta en
+  # una ruta de Windows antes de llegar a AWS.
+  echo "Registros: MSYS_NO_PATHCONV=1 aws logs tail /ecs/$cluster/carga-base --since 1h"
   if [ "$codigo" != "0" ]; then
     razon=$(aws ecs describe-tasks --cluster "$cluster" --tasks "$arn" \
       --query 'tasks[0].stoppedReason' --output text)
     echo "La tarea falló (código $codigo): $razon" >&2
+    echo "Últimos registros de la tarea:" >&2
+    MSYS_NO_PATHCONV=1 aws logs tail "/ecs/$cluster/carga-base" --since 1h \
+      --log-stream-name-prefix "carga/carga/${arn##*/}" --format short 2>&1 | tail -n 40 >&2 || true
     return 1
   fi
 }
