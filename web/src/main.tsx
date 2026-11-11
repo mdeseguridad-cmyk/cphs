@@ -13,6 +13,7 @@ import { Comites } from "./paginas/Comites";
 import { Comite } from "./paginas/Comite";
 import { Centros } from "./paginas/Centros";
 import { Usuarios } from "./paginas/Usuarios";
+import { Bitacora } from "./paginas/Bitacora";
 
 type Estado =
   | { fase: "cargando" }
@@ -92,7 +93,7 @@ function Marco(p: { entorno: string }) {
   const admin = s.esAdmin(s.empresaId);
   const nombre = [s.yo.nombres, s.yo.apellidos].filter(Boolean).join(" ") || s.yo.rut;
   const rolesVisibles = [...new Set(s.yo.roles.filter((r) => s.empresaId === null || r.empresa_id === s.empresaId || r.organismo_id !== null).map((r) => NOMBRE_ROL[r.rol]))];
-  const titulos: Record<string, string> = { "/": "Panel", "/comites": "Comités", "/centros": "Centros de trabajo", "/usuarios": "Usuarios y accesos" };
+  const titulos: Record<string, string> = { "/": "Panel", "/comites": "Comités", "/centros": "Centros de trabajo", "/usuarios": "Usuarios y accesos", "/bitacora": "Bitácora de accesos" };
   const titulo = titulos[ubicacion.pathname] ?? (ubicacion.pathname.startsWith("/comites/") ? "Comité" : "");
 
   return (
@@ -113,6 +114,7 @@ function Marco(p: { entorno: string }) {
               <div className="grupo">Empresa</div>
               <NavLink to="/centros">{icono.centros}Centros de trabajo</NavLink>
               {admin ? <NavLink to="/usuarios">{icono.usuarios}Usuarios y accesos</NavLink> : null}
+              {admin ? <NavLink to="/bitacora">{icono.bitacora}Bitácora de accesos</NavLink> : null}
             </>
           ) : null}
         </nav>
@@ -149,6 +151,7 @@ function Marco(p: { entorno: string }) {
             <Route path="/comites/:id" element={<Comite />} />
             <Route path="/centros" element={s.empresaId !== null ? <Centros /> : <Navigate to="/" />} />
             <Route path="/usuarios" element={admin ? <Usuarios /> : <Navigate to="/" />} />
+            <Route path="/bitacora" element={admin ? <Bitacora /> : <Navigate to="/" />} />
             <Route path="*" element={<Navigate to="/" />} />
           </Routes>
         </main>

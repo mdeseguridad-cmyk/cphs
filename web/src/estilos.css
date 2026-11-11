@@ -102,6 +102,8 @@ input:focus, select:focus, textarea:focus, .btn:focus-visible, .nav a:focus-visi
 .campo .error { font-size: 12px; color: var(--crit); }
 .casilla { display: flex; gap: 8px; align-items: center; }
 .filtros { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
+.filtro { display: flex; flex-direction: column; gap: 4px; font-size: 12px; font-weight: 700; color: var(--muted); }
+.filtro input, .filtro select { font-weight: 400; color: var(--fg); font-size: 14px; }
 
 .chip { display: inline-flex; align-items: center; font-size: 11.5px; font-weight: 700; padding: 3px 9px; border-radius: 20px; white-space: nowrap; background: var(--surface-2); color: var(--muted); }
 .chip.ok { background: var(--ok-soft); color: var(--ok); }
@@ -156,6 +158,7 @@ input:focus, select:focus, textarea:focus, .btn:focus-visible, .nav a:focus-visi
 .cargando { padding: 40px; text-align: center; color: var(--faint); }
 
 @media (max-width: 860px) {
+  .filtro { flex: 1 1 140px; }
   .app { grid-template-columns: 1fr; }
   .lateral { position: fixed; left: 0; top: 0; bottom: 0; width: 260px; z-index: 40; transform: translateX(-100%); transition: transform .2s; }
   .lateral.abierta { transform: none; }

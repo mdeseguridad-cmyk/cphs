@@ -273,6 +273,20 @@ await paso("invita a un usuario", async () => {
   await captura(p, "05-usuarios");
 });
 
+await paso("la bitácora muestra quién vio o cambió datos personales, y se descarga", async () => {
+  await p.getByRole("link", { name: "Bitácora de accesos" }).click();
+  await p.getByRole("heading", { name: "Bitácora de accesos" }).waitFor();
+  await p.locator("tr", { hasText: "Integrante" }).getByText("Creó").first().waitFor();
+  await p.getByLabel("Acción").selectOption("ver");
+  await p.locator("tbody tr").first().getByText("Vio").waitFor();
+  if (await p.locator("tbody tr", { hasText: "Creó" }).count()) throw new Error("el filtro de acción no se aplicó");
+  await captura(p, "05b-bitacora");
+  const [descarga] = await Promise.all([p.waitForEvent("download"), p.getByRole("button", { name: "Descargar CSV" }).click()]);
+  if (!/^bitacora-accesos-\d{4}-\d{2}-\d{2}\.csv$/.test(descarga.suggestedFilename())) throw new Error(`nombre: ${descarga.suggestedFilename()}`);
+  await p.getByLabel("Acción").selectOption("exportar");
+  await p.locator("tbody tr").first().getByText("Descargó").waitFor();
+});
+
 await paso("centros de trabajo de la empresa", async () => {
   await p.getByRole("link", { name: "Centros de trabajo" }).click();
   await p.getByRole("cell", { name: /Planta Norte/ }).waitFor();
@@ -283,6 +297,7 @@ await paso("el coordinador de C1 no administra usuarios ni otros comités", asyn
   await ingresar(p, "16.161.616-8");
   await p.getByRole("heading", { name: "Panel" }).waitFor();
   if (await p.getByRole("link", { name: "Usuarios y accesos" }).count()) throw new Error("ve Usuarios y accesos");
+  if (await p.getByRole("link", { name: "Bitácora de accesos" }).count()) throw new Error("ve la bitácora de accesos");
   await p.getByRole("link", { name: "Comités" }).click();
   await p.getByRole("cell", { name: "C1", exact: true }).waitFor();
   if (await p.getByRole("cell", { name: "CPHS Bodega Central" }).count()) throw new Error("ve un comité que no es suyo");

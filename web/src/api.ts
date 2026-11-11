@@ -57,6 +57,35 @@ export async function api<T = unknown>(metodo: "GET" | "POST" | "PUT" | "PATCH" 
   return datos as T;
 }
 
+/** Descarga un archivo de la API (con el token de la sesión) y lo guarda con el nombre que entrega el servidor. */
+export async function descargar(ruta: string, nombrePorDefecto: string): Promise<void> {
+  const token = await autenticador().token();
+  if (!token) {
+    alExpirar?.();
+    throw new ErrorApi(401, "no_autenticado", "Su sesión terminó");
+  }
+  let r: Response;
+  try {
+    r = await fetch(ruta, { headers: { "x-token-usuario": token } });
+  } catch {
+    throw new ErrorApi(0, "red", "No hay conexión con el servidor");
+  }
+  if (!r.ok) {
+    const d = (await r.json().catch(() => ({}))) as { error?: string; mensaje?: string };
+    if (r.status === 401) alExpirar?.();
+    throw new ErrorApi(r.status, d.error ?? "error", d.mensaje ?? `Error ${r.status}`);
+  }
+  const nombre = /filename="([^"]+)"/.exec(r.headers.get("content-disposition") ?? "")?.[1] ?? nombrePorDefecto;
+  const url = URL.createObjectURL(await r.blob());
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = nombre;
+  document.body.append(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
 export interface Subida {
   id: number;
   subida: { url: string; encabezados: Record<string, string> };

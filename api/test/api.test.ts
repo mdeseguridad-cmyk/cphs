@@ -221,6 +221,56 @@ describe("API de Paritario", { skip: hay ? false : "sin base de pruebas (PGTEST_
       const [coord] = await sqlAdmin<{ id: number }>("SELECT id FROM usuario WHERE rut = '16161616-8'");
       assert.deepEqual(await visibles(coord!.id), [], "un coordinador no consulta la bitácora");
     });
+
+    it("el administrador consulta la bitácora con lo que se vio o cambió, filtrada y paginada", async () => {
+      const e1 = await empresaId("Empresa 1");
+      const r = await llamar("GET", `/api/empresas/${e1}/bitacora`, "admin1");
+      assert.equal(r.status, 200);
+      const entradas = r.json.entradas as Record<string, any>[];
+      assert.ok(entradas.length >= 2);
+      const alta = entradas.find((e) => e.accion === "crear" && e.entidad === "comite_integrante");
+      assert.ok(alta, "el alta de un integrante aparece");
+      assert.equal(alta!.comite, "C1");
+      assert.ok(alta!.detalle, "describe a la persona afectada");
+      assert.ok(alta!.rut, "identifica a quien lo hizo");
+
+      const soloCrear = await llamar("GET", `/api/empresas/${e1}/bitacora?accion=crear`, "admin1");
+      assert.ok(soloCrear.json.entradas.every((e: any) => e.accion === "crear"));
+      const futuro = await llamar("GET", `/api/empresas/${e1}/bitacora?desde=2099-01-01`, "admin1");
+      assert.equal(futuro.json.entradas.length, 0);
+      assert.equal((await llamar("GET", `/api/empresas/${e1}/bitacora?desde=2025-02-01&hasta=2025-01-01`, "admin1")).status, 422);
+
+      const pag1 = await llamar("GET", `/api/empresas/${e1}/bitacora?limite=1`, "admin1");
+      assert.equal(pag1.json.entradas.length, 1);
+      assert.equal(pag1.json.siguiente, pag1.json.entradas[0].id);
+      const pag2 = await llamar("GET", `/api/empresas/${e1}/bitacora?limite=1&antes=${pag1.json.siguiente}`, "admin1");
+      assert.ok(pag2.json.entradas[0].id < pag1.json.siguiente);
+    });
+
+    it("solo el administrador de esa empresa consulta su bitácora", async () => {
+      const e1 = await empresaId("Empresa 1");
+      assert.equal((await llamar("GET", `/api/empresas/${e1}/bitacora`, "coord")).status, 403);
+      assert.equal((await llamar("GET", `/api/empresas/${e1}/bitacora`, "auditor")).status, 403);
+      assert.equal((await llamar("GET", `/api/empresas/${e1}/bitacora`, "admin3")).status, 403);
+      assert.equal((await llamar("GET", `/api/empresas/${e1}/bitacora.csv`, "admin3")).status, 403);
+    });
+
+    it("descargar la bitácora entrega un CSV y queda registrado", async () => {
+      const e1 = await empresaId("Empresa 1");
+      const r = await p.app.inject({ method: "GET", url: `/api/empresas/${e1}/bitacora.csv`, headers: { "x-token-usuario": tokens.admin1! } });
+      assert.equal(r.statusCode, 200);
+      assert.match(r.headers["content-type"] as string, /^text\/csv/);
+      const lineas = r.body.replace(/^\uFEFF/, "").trim().split("\r\n");
+      assert.match(lineas[0]!, /^Fecha \(hora de Chile\);RUT;Persona;Acción/);
+      assert.ok(lineas.length >= 3);
+      const [n] = await sqlAdmin<{ n: number }>(
+        "SELECT count(*)::int AS n FROM log_acceso WHERE accion = 'exportar' AND entidad = 'log_acceso' AND empresa_id = $1",
+        [e1],
+      );
+      assert.equal(n!.n, 1);
+      const usuarios = await llamar("GET", `/api/empresas/${e1}/bitacora/usuarios`, "admin1");
+      assert.ok((usuarios.json as unknown as any[]).some((u) => u.rut === "15151515-0"));
+    });
   });
 
   describe("programa de trabajo", () => {

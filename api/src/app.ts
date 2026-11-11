@@ -17,6 +17,7 @@ import { rutasPrograma } from "./rutas/programa.js";
 import { rutasReuniones } from "./rutas/reuniones.js";
 import { rutasDocumentos } from "./rutas/documentos.js";
 import { rutasUsuarios } from "./rutas/usuarios.js";
+import { rutasBitacora } from "./rutas/bitacora.js";
 import { rutasEventos } from "./interno/eventos.js";
 import { rutasTrabajos } from "./interno/trabajos.js";
 
@@ -99,6 +100,7 @@ export function construirApp(o: Opciones): FastifyInstance {
   rutasReuniones(app, ctx);
   rutasDocumentos(app, ctx);
   rutasUsuarios(app, ctx);
+  rutasBitacora(app, ctx);
   rutasEventos(app, ctx);
   return app;
 }

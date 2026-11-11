@@ -111,7 +111,7 @@ Permite que las empresas gestionen sus propios accesos, con aprobación del admi
 - Enviar una **solicitud de acceso** indicando rol y ámbito (empresa o comité).
 - El administrador **aprueba o rechaza** las solicitudes; al aprobar, se genera el acceso con su ámbito.
 - Gestionar usuarios y roles vigentes. Cada cuenta está **invitada** (aún no ingresa), **activa** o **bloqueada**; se puede reenviar la invitación, bloquear y desbloquear. Bloquear cierra las sesiones abiertas e impide el ingreso de inmediato. La sesión vive solo en la pestaña del navegador y se cierra al cerrarla. Las cuentas nunca se borran, para conservar quién hizo cada cosa.
-- Toda operación sobre datos personales queda en la bitácora de acceso. La bitácora ya está separada por empresa: solo el administrador de cada empresa puede consultar sus entradas, y nadie puede registrar a nombre de otro. Falta la pantalla para consultarla (está en el prototipo; se implementa después del MVP).
+- Toda operación sobre datos personales queda en la bitácora de acceso. La bitácora ya está separada por empresa: solo el administrador de cada empresa puede consultar sus entradas, y nadie puede registrar a nombre de otro. El administrador la consulta en la pantalla **Bitácora de accesos**: quién vio, creó o editó qué dato (integrante, asistencia a una reunión o documento) y de qué comité, con filtros por fechas, persona, comité y acción, y descarga en CSV. La descarga queda registrada en la misma bitácora.
 
 ## 11. Panel, reportes y notificaciones
 
@@ -183,7 +183,7 @@ Cada empresa nueva se incorpora con un proceso guiado; no hay un sistema anterio
 
 La entrega avanza por fases. El MVP (fases 1 y 2) cubre el núcleo legal y el programa de trabajo, y se valida con un piloto de 10 empresas. La fase 3 agrega certificación, autoservicio y reportes; la fase 4 completa la privacidad 21.719, la PWA móvil y la apertura a nuevos clientes y a organismos en marca blanca.
 
-**Estado del MVP:** la API (`api/`) y la aplicación web (`web/`) de las fases 1 y 2 están programadas y probadas: verificaciones de la base de datos, pruebas de la API contra PostgreSQL real y una prueba de punta a punta en el navegador con los roles de administrador, coordinador, auditor y organismo. La infraestructura del piloto está escrita en Terraform; falta aplicarla en la cuenta de AWS y probar el inicio de sesión real con Cognito. Quedan para después del MVP: activar MFA y recuperar la contraseña desde la aplicación, consulta de la bitácora de accesos por la empresa, solicitudes de acceso por autoservicio, investigación de accidentes y sincronización por SFTP.
+**Estado del MVP:** la API (`api/`) y la aplicación web (`web/`) de las fases 1 y 2 están programadas y probadas: verificaciones de la base de datos, pruebas de la API contra PostgreSQL real y una prueba de punta a punta en el navegador con los roles de administrador, coordinador, auditor y organismo. El piloto está desplegado en AWS (región de São Paulo) y el inicio de sesión real con Cognito funciona. Quedan para después del MVP: activar MFA y recuperar la contraseña desde la aplicación, solicitudes de acceso por autoservicio, investigación de accidentes y sincronización por SFTP.
 
 ## 17. Supuestos, restricciones y riesgos
 
