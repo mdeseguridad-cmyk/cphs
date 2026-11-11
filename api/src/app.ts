@@ -69,7 +69,16 @@ export function origenDe(req: FastifyRequest): Origen {
 
 export function construirApp(o: Opciones): FastifyInstance {
   const app = Fastify({
-    logger: o.registro === false ? false : { level: "info", redact: ["req.headers.authorization", 'req.headers["x-token-usuario"]'] },
+    logger:
+      o.registro === false
+        ? false
+        : {
+            level: "info",
+            redact: ["req.headers.authorization", 'req.headers["x-token-usuario"]'],
+            // Los registros técnicos no guardan la IP del visitante (dato
+            // personal): la bitácora de accesos ya la registra donde corresponde.
+            serializers: { req: (r: FastifyRequest) => ({ method: r.method, url: r.url }) },
+          },
     bodyLimit: 1024 * 1024,
     trustProxy: true,
   });

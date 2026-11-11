@@ -21,6 +21,29 @@ resource "aws_db_parameter_group" "principal" {
     name  = "log_min_duration_statement"
     value = "1000" # registra consultas de más de 1 segundo
   }
+
+  # Sin los valores de las consultas en el registro: podrían ser datos
+  # personales (un RUT, un nombre). Queda la consulta, no sus parámetros.
+  parameter {
+    name  = "log_parameter_max_length"
+    value = "0"
+  }
+
+  parameter {
+    name  = "log_parameter_max_length_on_error"
+    value = "0"
+  }
+}
+
+# Registro de PostgreSQL en CloudWatch, con 30 días como los demás. Si no se
+# declara, RDS lo crea sin vencimiento. Se crea antes que la base para que
+# RDS use este. En una base ya creada, impórtelo una vez antes de aplicar:
+#   MSYS_NO_PATHCONV=1 terraform import aws_cloudwatch_log_group.base /aws/rds/instance/paritario-piloto/postgresql
+resource "aws_cloudwatch_log_group" "base" {
+  #checkov:skip=CKV_AWS_338:30 días por minimización de datos personales (Ley 21.719)
+  #checkov:skip=CKV_AWS_158:Cifrado por defecto de CloudWatch; llave propia recomendada para producción
+  name              = "/aws/rds/instance/${local.nombre}/postgresql"
+  retention_in_days = 30
 }
 
 resource "aws_db_instance" "principal" {
@@ -58,6 +81,8 @@ resource "aws_db_instance" "principal" {
   deletion_protection       = true
   skip_final_snapshot       = false
   final_snapshot_identifier = "${local.nombre}-final"
+
+  depends_on = [aws_cloudwatch_log_group.base]
 }
 
 # Credenciales del usuario de la aplicación. scripts/cargar_base.sh crea el

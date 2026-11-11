@@ -187,6 +187,16 @@ Sin dominio, la aplicación queda en `https://xxxx.cloudfront.net` (salida `url`
 2. Defina `dominio` y `certificado_cloudfront_arn` y aplique.
 3. Cree en su DNS un CNAME de `app.su-dominio.cl` hacia la salida `cloudfront_dominio`.
 
+## Registro de la base en un piloto ya creado
+
+El registro de PostgreSQL en CloudWatch vence a los 30 días, como los demás. En un piloto creado antes de este cambio, RDS ya creó ese registro (sin vencimiento): impórtelo una vez antes del siguiente `terraform apply`. En Git Bash:
+
+```bash
+MSYS_NO_PATHCONV=1 terraform import aws_cloudwatch_log_group.base /aws/rds/instance/paritario-piloto/postgresql
+```
+
+En un piloto nuevo no hace falta: Terraform lo crea antes que la base.
+
 ## Antes de cargar datos reales
 
 1. **Correo.** Defina `dominio_correo`, publique en el DNS los tres registros CNAME de la salida `dkim_registros` y pida a AWS salir del sandbox de SES (consola de SES → *Request production access*). En sandbox solo se puede enviar a direcciones verificadas.
